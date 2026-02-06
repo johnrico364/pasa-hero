@@ -1,0 +1,39 @@
+{
+  "project_info": {
+    "project_number": "66461159713",
+    "project_id": "pasahero-78208",
+    "storage_bucket": "pasahero-78208.firebasestorage.app"
+  },
+  "client": [
+    {
+      "client_info": {
+        "mobilesdk_app_id": "1:66461159713:android:4204216d4cf64fb68dee60",
+        "android_client_info": {
+          "package_name": "com.example.user"
+        }
+      },
+      "oauth_client": [
+        {
+          "client_id": "66461159713-fg5mq4ls64mbt2i88uh9u66bn0bm0jdg.apps.googleusercontent.com",
+          "client_type": 3
+        }
+      ],
+      "api_key": [
+        {
+          "current_key": "AIzaSyAIYNAjmOZOSY558KqbtrF6nGF6hi_6CKE"
+        }
+      ],
+      "services": {
+        "appinvite_service": {
+          "other_platform_oauth_client": [
+            {
+              "client_id": "66461159713-fg5mq4ls64mbt2i88uh9u66bn0bm0jdg.apps.googleusercontent.com",
+              "client_type": 3
+            }
+          ]
+        }
+      }
+    }
+  ],
+  "configuration_version": "1"
+}
