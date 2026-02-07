@@ -3,14 +3,12 @@ import 'package:flutter_bloc/flutter_bloc.dart';
 import 'auth_bloc_bloc.dart';
 import 'auth_bloc_event.dart';
 import 'auth_bloc_state.dart';
-import 'auth_bloc_view_model.dart';
-
 
 class AuthBlocScreen extends StatefulWidget {
   const AuthBlocScreen({
     required this.bloc,
     super.key,
-  }) ;
+  });
 
   @protected
   final AuthBlocBloc bloc;
@@ -22,13 +20,12 @@ class AuthBlocScreen extends StatefulWidget {
 }
 
 class AuthBlocScreenState extends State<AuthBlocScreen> {
-
   @override
   void initState() {
     super.initState();
-    // load data on init widget if bloc has not data
-    if (!widget.bloc.state.hasData) {
-      _load();
+    // Check auth state on init
+    if (widget.bloc.state.user == null && !widget.bloc.state.isLoading) {
+      _checkAuthState();
     }
   }
 
@@ -48,16 +45,20 @@ class AuthBlocScreenState extends State<AuthBlocScreen> {
       ) {
         // declaration of bloc states
         return currentState.when(
-          onLoading: ()=>const CircularProgressIndicator(),
-          onEmpty: (data) =>  _Empty(),
-          onData: (data) =>  _BodyList(data: data),
-          onError: (e) =>  Center(
+          onLoading: () => const Center(
+            child: CircularProgressIndicator(),
+          ),
+          onUnauthenticated: () => _Empty(),
+          onAuthenticated: (user) => _AuthenticatedView(user: user),
+          onError: (e) => Center(
             child: Column(
+              mainAxisAlignment: MainAxisAlignment.center,
               children: [
                 Text(e.toString()),
+                const SizedBox(height: 16),
                 TextButton(
-                  onPressed: _load,
-                  child: const Text('ReLoad'),
+                  onPressed: _checkAuthState,
+                  child: const Text('Retry'),
                 )
               ],
             ),
@@ -67,63 +68,72 @@ class AuthBlocScreenState extends State<AuthBlocScreen> {
     );
   }
 
-  void _load() {
-    widget.bloc.add(LoadAuthBlocEvent(id:'1'));
+  void _checkAuthState() {
+    widget.bloc.add(CheckAuthStateEvent());
   }
-
 }
 
+class _AuthenticatedView extends StatelessWidget {
+  final user;
 
-class _BodyList extends StatefulWidget {
-  const _BodyList({required this.data});
-
-  final AuthBlocViewModel data;
-
-  @override
-  State<_BodyList> createState() => _BodyListState();
-}
-
-class _BodyListState extends State<_BodyList> {
-
-  @override
-  void initState() {
-    super.initState();
-  }
-
-  @override
-  void dispose() {
-    super.dispose();
-  }
+  const _AuthenticatedView({required this.user});
 
   @override
   Widget build(BuildContext context) {
-
-    return CustomScrollView(
-        // primary: true,
-        slivers: [
-          const SliverToBoxAdapter(child: Divider()),
-          SliverList(
-            delegate: SliverChildBuilderDelegate(
-              (BuildContext context, int index) {
-          final item = widget.data.items![index];
-          if (index == 0) {
-            return Text('Header $index, id = ${item.name}');
-          }
-          return Text('Index = $index, id = ${item.name}');
-        },
-        childCount: widget.data.items!.length,
-    ))]);
+    return Center(
+      child: Column(
+        mainAxisAlignment: MainAxisAlignment.center,
+        children: [
+          const Icon(
+            Icons.check_circle,
+            color: Colors.green,
+            size: 64,
+          ),
+          const SizedBox(height: 16),
+          Text(
+            'Authenticated',
+            style: Theme.of(context).textTheme.headlineMedium,
+          ),
+          const SizedBox(height: 8),
+          Text(
+            'Email: ${user.email ?? 'N/A'}',
+            style: Theme.of(context).textTheme.bodyLarge,
+          ),
+          const SizedBox(height: 8),
+          Text(
+            'UID: ${user.uid}',
+            style: Theme.of(context).textTheme.bodySmall,
+          ),
+        ],
+      ),
+    );
   }
 }
-
 
 class _Empty extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
-    return Column(
-      children: <Widget>[
-        Text('Empty'),
-      ],
+    return Center(
+      child: Column(
+        mainAxisAlignment: MainAxisAlignment.center,
+        children: <Widget>[
+          const Icon(
+            Icons.person_outline,
+            size: 64,
+            color: Colors.grey,
+          ),
+          const SizedBox(height: 16),
+          Text(
+            'Not Authenticated',
+            style: Theme.of(context).textTheme.headlineMedium,
+          ),
+          const SizedBox(height: 8),
+          Text(
+            'Please log in to continue',
+            style: Theme.of(context).textTheme.bodyLarge,
+          ),
+        ],
+      ),
     );
   }
 }

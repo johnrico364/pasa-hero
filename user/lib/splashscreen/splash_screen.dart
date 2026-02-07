@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import '../features/auth/login/login_sreen.dart';
+import '../features/auth/register/register_screen.dart';
 
 class SplashScreen extends StatelessWidget {
   const SplashScreen({super.key});
@@ -115,7 +116,7 @@ class SplashScreen extends StatelessWidget {
                         Navigator.push(
                           context,
                           MaterialPageRoute(
-                            builder: (context) => const LoginScreen(),
+                            builder: (context) => const RegisterScreen(),
                           ),
                         );
                       },

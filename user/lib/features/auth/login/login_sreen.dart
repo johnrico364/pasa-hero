@@ -1,5 +1,9 @@
 import 'package:flutter/material.dart';
+import 'package:flutter_bloc/flutter_bloc.dart';
 import 'login_form.dart';
+import '../auth_bloc/auth_bloc_bloc.dart';
+import '../auth_bloc/auth_bloc_provider.dart';
+import '../../../core/services/auth_service.dart';
 
 class LoginScreen extends StatefulWidget {
   const LoginScreen({super.key});
@@ -41,9 +45,15 @@ class _LoginScreenState extends State<LoginScreen> {
     // Responsive border radius
     final borderRadius = isSmallScreen ? 30.0 : 50.0;
 
-    return Scaffold(
-      backgroundColor: const Color(0xFF1E3A8A),
-      body: SafeArea(
+    return BlocProvider(
+      create: (context) => AuthBlocBloc(
+        provider: AuthBlocProvider(
+          authService: AuthService(),
+        ),
+      ),
+      child: Scaffold(
+        backgroundColor: const Color(0xFF1E3A8A),
+        body: SafeArea(
         bottom: false,
         child: LayoutBuilder(
           builder: (context, constraints) {
@@ -90,6 +100,7 @@ class _LoginScreenState extends State<LoginScreen> {
             );
           },
         ),
+      ),
       ),
     );
   }

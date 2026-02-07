@@ -1,29 +1,30 @@
-import 'auth_bloc_view_model.dart';
+import 'package:firebase_auth/firebase_auth.dart';
 
 class AuthBlocState {
   final bool isLoading;
-  final AuthBlocViewModel? data;
+  final User? user;
   final Object? error;
   final int version;
 
   const AuthBlocState({
     this.version = 0,
     this.isLoading = false,
-    this.data,
+    this.user,
     this.error,
   });
 
-  bool get hasData => data != null && data!.items != null && data!.items!.isNotEmpty;
+  bool get isAuthenticated => user != null;
+  bool get isUnauthenticated => user == null && !isLoading && error == null;
 
   AuthBlocState copy({
     bool? isLoading,
-    AuthBlocViewModel? data,
+    User? user,
     Object? error,
     int? version,
   }) {
     return AuthBlocState(
       isLoading: isLoading ?? this.isLoading,
-      data: data ?? this.data,
+      user: user ?? this.user,
       error: error ?? this.error,
       version: version ?? this.version,
     );
@@ -31,12 +32,12 @@ class AuthBlocState {
 
   AuthBlocState copyWithoutError({
     bool? isLoading,
-    AuthBlocViewModel? data,
+    User? user,
     int? version,
   }) {
     return AuthBlocState(
       isLoading: isLoading ?? this.isLoading,
-      data: data ?? this.data,
+      user: user ?? this.user,
       error: null,
       version: version ?? this.version,
     );
@@ -49,7 +50,7 @@ class AuthBlocState {
   }) {
     return AuthBlocState(
       isLoading: isLoading ?? this.isLoading,
-      data: null,
+      user: null,
       error: error ?? this.error,
       version: version ?? this.version,
     );
@@ -57,8 +58,8 @@ class AuthBlocState {
 
   T when<T>({
     required T Function() onLoading,
-    required T Function(AuthBlocViewModel? data) onEmpty,
-    required T Function(AuthBlocViewModel data) onData,
+    required T Function() onUnauthenticated,
+    required T Function(User user) onAuthenticated,
     required T Function(Object error) onError,
   }) {
     if (error != null) {
@@ -67,9 +68,9 @@ class AuthBlocState {
     if (isLoading) {
       return onLoading();
     }
-    if (data == null || data!.items == null || data!.items!.isEmpty) {
-      return onEmpty(data);
+    if (user != null) {
+      return onAuthenticated(user!);
     }
-    return onData(data!);
+    return onUnauthenticated();
   }
 }

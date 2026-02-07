@@ -1,5 +1,10 @@
 import 'package:flutter/material.dart';
+import 'package:flutter_bloc/flutter_bloc.dart';
 import '../register/register_screen.dart';
+import '../auth_bloc/auth_bloc_bloc.dart';
+import '../auth_bloc/auth_bloc_event.dart';
+import '../auth_bloc/auth_bloc_state.dart';
+import '../../near_me/Screen/nearme_screen.dart';
 
 class LoginForm extends StatefulWidget {
   final TextEditingController emailController;
@@ -17,17 +22,66 @@ class LoginForm extends StatefulWidget {
 
 class _LoginFormState extends State<LoginForm> {
   bool _obscurePassword = true;
+  String? _validationError;
+  final ScrollController _scrollController = ScrollController();
+  final GlobalKey _errorKey = GlobalKey();
+
+  @override
+  void dispose() {
+    _scrollController.dispose();
+    super.dispose();
+  }
+
+  void _scrollToError() {
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (_errorKey.currentContext != null) {
+        Scrollable.ensureVisible(
+          _errorKey.currentContext!,
+          duration: const Duration(milliseconds: 300),
+          curve: Curves.easeInOut,
+          alignment: 0.1, // Show error near the top
+        );
+      }
+    });
+  }
 
   @override
   Widget build(BuildContext context) {
-    return Container(
-      color: const Color(0xFFF5F5F5),
-      padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 16),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        mainAxisSize: MainAxisSize.min,
-        children: [
-          const SizedBox(height: 12),
+    return BlocListener<AuthBlocBloc, AuthBlocState>(
+      listener: (context, state) {
+        if (state.isAuthenticated && state.user != null) {
+          // Navigate to near me screen on successful login
+          // Use a post-frame callback to ensure navigation happens after build
+          WidgetsBinding.instance.addPostFrameCallback((_) {
+            Navigator.of(context).pushAndRemoveUntil(
+              MaterialPageRoute(
+                builder: (context) => const NearMeScreen(),
+              ),
+              (route) => false, // Remove all previous routes
+            );
+          });
+        }
+        // Scroll to error when it appears
+        if (state.error != null) {
+          _scrollToError();
+        }
+        // Clear validation error when auth state changes
+        if (state.error != null || state.isAuthenticated) {
+          setState(() {
+            _validationError = null;
+          });
+        }
+      },
+      child: Container(
+        color: const Color(0xFFF5F5F5),
+        child: SingleChildScrollView(
+          controller: _scrollController,
+          padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 16),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            mainAxisSize: MainAxisSize.min,
+            children: [
+            const SizedBox(height: 12),
           // Title
           const Text(
             'Login your account',
@@ -38,6 +92,56 @@ class _LoginFormState extends State<LoginForm> {
             ),
           ),
           const SizedBox(height: 18),
+          // Error Message (if any)
+          Builder(
+            builder: (context) {
+              return BlocBuilder<AuthBlocBloc, AuthBlocState>(
+                builder: (context, state) {
+                  final errorMessage = _validationError ?? 
+                    (state.error != null 
+                      ? state.error.toString().replaceFirst('Exception: ', '')
+                      : null);
+                  
+                  if (errorMessage != null) {
+                    return Container(
+                      key: _errorKey,
+                      margin: const EdgeInsets.only(bottom: 16),
+                      padding: const EdgeInsets.all(12),
+                      decoration: BoxDecoration(
+                        color: Colors.red.shade50,
+                        borderRadius: BorderRadius.circular(8),
+                        border: Border.all(
+                          color: Colors.red.shade300,
+                          width: 1,
+                        ),
+                      ),
+                      child: Row(
+                        children: [
+                          Icon(
+                            Icons.error_outline,
+                            color: Colors.red.shade700,
+                            size: 20,
+                          ),
+                          const SizedBox(width: 8),
+                          Expanded(
+                            child: Text(
+                              errorMessage,
+                              style: TextStyle(
+                                color: Colors.red.shade700,
+                                fontSize: 14,
+                                fontWeight: FontWeight.w500,
+                              ),
+                            ),
+                          ),
+                        ],
+                      ),
+                    );
+                  }
+                  return const SizedBox.shrink();
+                },
+              );
+            },
+          ),
           // Email Input
           const Text(
             'Email',
@@ -171,30 +275,62 @@ class _LoginFormState extends State<LoginForm> {
             ),
           const SizedBox(height: 16),
           // Log In Button
-          SizedBox(
-            width: double.infinity,
-            height: 50,
-            child: ElevatedButton(
-                onPressed: () {
-                  // Handle login
-                },
-                style: ElevatedButton.styleFrom(
-                  backgroundColor: const Color(0xFF3B82F6), // Blue
-                  shape: RoundedRectangleBorder(
-                    borderRadius: BorderRadius.circular(12),
+          BlocBuilder<AuthBlocBloc, AuthBlocState>(
+            builder: (context, state) {
+              return SizedBox(
+                width: double.infinity,
+                height: 50,
+                child: ElevatedButton(
+                  onPressed: state.isLoading
+                      ? null
+                      : () {
+                          setState(() {
+                            _validationError = null;
+                          });
+                          
+                          if (widget.emailController.text.isEmpty ||
+                              widget.passwordController.text.isEmpty) {
+                            setState(() {
+                              _validationError = 'Please fill in all fields';
+                            });
+                            _scrollToError();
+                            return;
+                          }
+                          context.read<AuthBlocBloc>().add(
+                                LoginEvent(
+                                  email: widget.emailController.text,
+                                  password: widget.passwordController.text,
+                                ),
+                              );
+                        },
+                  style: ElevatedButton.styleFrom(
+                    backgroundColor: const Color(0xFF3B82F6), // Blue
+                    shape: RoundedRectangleBorder(
+                      borderRadius: BorderRadius.circular(12),
+                    ),
+                    elevation: 0,
                   ),
-                  elevation: 0,
+                  child: state.isLoading
+                      ? const SizedBox(
+                          height: 20,
+                          width: 20,
+                          child: CircularProgressIndicator(
+                            strokeWidth: 2,
+                            valueColor: AlwaysStoppedAnimation<Color>(Colors.white),
+                          ),
+                        )
+                      : const Text(
+                          'Log in',
+                          style: TextStyle(
+                            color: Colors.white,
+                            fontSize: 17,
+                            fontWeight: FontWeight.w600,
+                          ),
+                        ),
                 ),
-                child: const Text(
-                  'Log in',
-                  style: TextStyle(
-                    color: Colors.white,
-                    fontSize: 17,
-                    fontWeight: FontWeight.w600,
-                  ),
-                ),
-              ),
-            ),
+              );
+            },
+          ),
           const SizedBox(height: 16),
           // Separator
           Row(
@@ -225,13 +361,17 @@ class _LoginFormState extends State<LoginForm> {
           ),
           const SizedBox(height: 16),
           // Log In with Google Button
-          SizedBox(
-            width: double.infinity,
-            height: 50,
-            child: OutlinedButton(
-                onPressed: () {
-                  // Handle Google login
-                },
+          BlocBuilder<AuthBlocBloc, AuthBlocState>(
+            builder: (context, state) {
+              return SizedBox(
+                width: double.infinity,
+                height: 50,
+                child: OutlinedButton(
+                  onPressed: state.isLoading
+                      ? null
+                      : () {
+                          context.read<AuthBlocBloc>().add(GoogleSignInEvent());
+                        },
                 style: OutlinedButton.styleFrom(
                   backgroundColor: Colors.white,
                   side: const BorderSide(
@@ -287,8 +427,10 @@ class _LoginFormState extends State<LoginForm> {
                     ),
                   ],
                 ),
-              ),
-            ),
+                ),
+              );
+            },
+          ),
           const SizedBox(height: 14),
           // Sign Up Link
           Center(
@@ -329,7 +471,9 @@ class _LoginFormState extends State<LoginForm> {
             ),
           ),
           const SizedBox(height: 10),
-        ],
+            ],
+          ),
+        ),
       ),
     );
   }

@@ -3,13 +3,13 @@ import 'auth_bloc_bloc.dart';
 import 'auth_bloc_event.dart';
 import 'auth_bloc_screen.dart';
 import 'auth_bloc_provider.dart';
-
+import '../../../core/services/auth_service.dart';
 
 class AuthBlocPage extends StatefulWidget {
   const AuthBlocPage({
     required this.bloc,
     super.key
-    });
+  });
   static const String routeName = '/authBloc';
   
   final AuthBlocBloc? bloc;
@@ -19,11 +19,14 @@ class AuthBlocPage extends StatefulWidget {
 }
 
 class _AuthBlocPageState extends State<AuthBlocPage> {
-
   AuthBlocBloc? _bloc;
   AuthBlocBloc get bloc {
     // get it by DI in real code.
-    _bloc ??= widget.bloc ?? AuthBlocBloc(provider: AuthBlocProvider());
+    _bloc ??= widget.bloc ?? AuthBlocBloc(
+      provider: AuthBlocProvider(
+        authService: AuthService(),
+      ),
+    );
     return _bloc!;
   }
 
@@ -32,25 +35,21 @@ class _AuthBlocPageState extends State<AuthBlocPage> {
     return Scaffold(
       appBar: AppBar(
         centerTitle: true,
-        title: const Text('AuthBloc'),
-         actions: [
+        title: const Text('Auth Bloc'),
+        actions: [
           IconButton(
-            icon: const Icon(Icons.error),
+            icon: const Icon(Icons.logout),
             onPressed: () {
-              bloc.add(ErrorYouAwesomeEvent());
+              bloc.add(LogoutEvent());
             },
+            tooltip: 'Logout',
           ),
           IconButton(
-            icon: const Icon(Icons.add),
+            icon: const Icon(Icons.refresh),
             onPressed: () {
-              bloc.add(AddAuthBlocEvent());
+              bloc.add(CheckAuthStateEvent());
             },
-          ),
-          IconButton(
-            icon: const Icon(Icons.clear),
-            onPressed: () {
-              bloc.add(ClearAuthBlocEvent());
-            },
+            tooltip: 'Refresh Auth State',
           ),
         ],
       ),

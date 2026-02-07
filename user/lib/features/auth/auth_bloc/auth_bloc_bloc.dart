@@ -2,66 +2,112 @@ import 'package:bloc/bloc.dart';
 import 'auth_bloc_event.dart';
 import 'auth_bloc_state.dart';
 import 'auth_bloc_provider.dart';
-import 'auth_bloc_view_model.dart';
 
 class AuthBlocBloc extends Bloc<AuthBlocEvent, AuthBlocState> {
   AuthBlocBloc({
     required this.provider,
     AuthBlocState? initialState,
   }) : super(initialState ?? const AuthBlocState()) {
-    on<LoadAuthBlocEvent>(_onLoadAuthBlocEvent);
-    on<AddAuthBlocEvent>(_onAddAuthBlocEvent);
-    on<ClearAuthBlocEvent>(_onClearAuthBlocEvent);
-    on<ErrorYouAwesomeEvent>(_onErrorYouAwesomeEvent);
+    on<LoginEvent>(_onLoginEvent);
+    on<RegisterEvent>(_onRegisterEvent);
+    on<GoogleSignInEvent>(_onGoogleSignInEvent);
+    on<GoogleSignUpEvent>(_onGoogleSignUpEvent);
+    on<LogoutEvent>(_onLogoutEvent);
+    on<CheckAuthStateEvent>(_onCheckAuthStateEvent);
   }
 
-  /// Use this for all requests to backend -  you can mock it in tests
   final AuthBlocProvider provider;
 
-  Future<void> _onLoadAuthBlocEvent(
-    LoadAuthBlocEvent event,
+  Future<void> _onLoginEvent(
+    LoginEvent event,
     Emitter<AuthBlocState> emit,
   ) async {
     emit(state.copyWithoutError(isLoading: true));
     try {
-      final result = await provider.fetchAsync(event.id);
+      final credential = await provider.authService.signInWithEmailAndPassword(
+        email: event.email,
+        password: event.password,
+      );
       emit(state.copyWithoutError(
         isLoading: false,
-        data: AuthBlocViewModel(items: result),
+        user: credential.user,
       ));
     } catch (error) {
       emit(state.copy(error: error, isLoading: false));
     }
   }
 
-  Future<void> _onAddAuthBlocEvent(
-    AddAuthBlocEvent event,
+  Future<void> _onRegisterEvent(
+    RegisterEvent event,
     Emitter<AuthBlocState> emit,
   ) async {
     emit(state.copyWithoutError(isLoading: true));
     try {
-      final result = await provider.addMore(state.data?.items);
+      final credential = await provider.authService.registerWithEmailAndPassword(
+        email: event.email,
+        password: event.password,
+        firstName: event.firstName,
+        lastName: event.lastName,
+      );
       emit(state.copyWithoutError(
         isLoading: false,
-        data: AuthBlocViewModel(items: result),
+        user: credential.user,
       ));
     } catch (error) {
       emit(state.copy(error: error, isLoading: false));
     }
   }
 
-  Future<void> _onClearAuthBlocEvent(
-    ClearAuthBlocEvent event,
+  Future<void> _onGoogleSignInEvent(
+    GoogleSignInEvent event,
     Emitter<AuthBlocState> emit,
   ) async {
     emit(state.copyWithoutError(isLoading: true));
-    emit(state.copyWithoutData(isLoading: false));
+    try {
+      final credential = await provider.authService.signInWithGoogle();
+      emit(state.copyWithoutError(
+        isLoading: false,
+        user: credential.user,
+      ));
+    } catch (error) {
+      emit(state.copy(error: error, isLoading: false));
+    }
   }
 
-  Future<void> _onErrorYouAwesomeEvent(
-    ErrorYouAwesomeEvent event,
+  Future<void> _onGoogleSignUpEvent(
+    GoogleSignUpEvent event,
     Emitter<AuthBlocState> emit,
   ) async {
-    throw Exception('Test error');
+    emit(state.copyWithoutError(isLoading: true));
+    try {
+      final credential = await provider.authService.signUpWithGoogle();
+      emit(state.copyWithoutError(
+        isLoading: false,
+        user: credential.user,
+      ));
+    } catch (error) {
+      emit(state.copy(error: error, isLoading: false));
+    }
+  }
+
+  Future<void> _onLogoutEvent(
+    LogoutEvent event,
+    Emitter<AuthBlocState> emit,
+  ) async {
+    emit(state.copyWithoutError(isLoading: true));
+    try {
+      await provider.authService.signOut();
+      emit(state.copyWithoutData(isLoading: false));
+    } catch (error) {
+      emit(state.copy(error: error, isLoading: false));
+    }
+  }
+
+  Future<void> _onCheckAuthStateEvent(
+    CheckAuthStateEvent event,
+    Emitter<AuthBlocState> emit,
+  ) async {
+    final user = provider.authService.currentUser;
+    emit(state.copyWithoutError(user: user));
   }
 }

@@ -3,6 +3,7 @@ import 'package:firebase_core/firebase_core.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'firebase_options.dart';
 import 'splashscreen/splash_screen.dart';
+import 'features/near_me/Screen/nearme_screen.dart';
 
 void main() async {
   WidgetsFlutterBinding.ensureInitialized();
@@ -121,15 +122,10 @@ class _AuthWrapperState extends State<AuthWrapper> {
           );
         }
 
-        // If user is logged in, show home screen (you can replace this with your home screen)
+        // If user is logged in, show near me screen
         if (snapshot.hasData && snapshot.data != null) {
-          // User is logged in - navigate to home screen
-          // TODO: Replace with your actual home screen
-          return const Scaffold(
-            body: Center(
-              child: Text('Home Screen - User is logged in'),
-            ),
-          );
+          // User is logged in - navigate to near me screen
+          return const NearMeScreen();
         }
 
         // User is not logged in - show splash screen

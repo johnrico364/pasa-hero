@@ -1,5 +1,9 @@
 import 'package:flutter/material.dart';
+import 'package:flutter_bloc/flutter_bloc.dart';
 import 'register_form.dart';
+import '../auth_bloc/auth_bloc_bloc.dart';
+import '../auth_bloc/auth_bloc_provider.dart';
+import '../../../core/services/auth_service.dart';
 
 class RegisterScreen extends StatefulWidget {
   const RegisterScreen({super.key});
@@ -32,9 +36,9 @@ class _RegisterScreenState extends State<RegisterScreen> {
     final isSmallScreen = screenWidth < 600;
     final isMediumScreen = screenWidth >= 600 && screenWidth < 900;
     
-    // Responsive logo size
-    final logoWidth = isSmallScreen ? screenWidth * 0.7 : (isMediumScreen ? 400.0 : 500.0);
-    final logoHeight = isSmallScreen ? screenWidth * 0.56 : (isMediumScreen ? 320.0 : 400.0);
+    // Responsive logo size - zoomed in (matching login screen)
+    final logoWidth = isSmallScreen ? screenWidth * 0.85 : (isMediumScreen ? 500.0 : 600.0);
+    final logoHeight = isSmallScreen ? screenWidth * 0.68 : (isMediumScreen ? 400.0 : 480.0);
     
     // Responsive header height
     final headerHeight = isSmallScreen ? screenHeight * 0.35 : screenHeight * 0.4;
@@ -45,9 +49,15 @@ class _RegisterScreenState extends State<RegisterScreen> {
     // Responsive border radius
     final borderRadius = isSmallScreen ? 30.0 : 50.0;
 
-    return Scaffold(
-      backgroundColor: const Color(0xFF1E3A8A),
-      body: SafeArea(
+    return BlocProvider(
+      create: (context) => AuthBlocBloc(
+        provider: AuthBlocProvider(
+          authService: AuthService(),
+        ),
+      ),
+      child: Scaffold(
+        backgroundColor: const Color(0xFF1E3A8A),
+        body: SafeArea(
         bottom: false,
         child: LayoutBuilder(
           builder: (context, constraints) {
@@ -96,6 +106,7 @@ class _RegisterScreenState extends State<RegisterScreen> {
             );
           },
         ),
+      ),
       ),
     );
   }
