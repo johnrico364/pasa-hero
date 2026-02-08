@@ -8,7 +8,7 @@
 PRODUCT_NAME = user
 
 // The application's bundle identifier
-PRODUCT_BUNDLE_IDENTIFIER = com.example.user
+PRODUCT_BUNDLE_IDENTIFIER = com.pasahero.app
 
 // The copyright displayed in application information
 PRODUCT_COPYRIGHT = Copyright © 2026 com.example. All rights reserved.

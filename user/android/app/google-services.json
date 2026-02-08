@@ -1,34 +1,49 @@
 {
   "project_info": {
-    "project_number": "66461159713",
-    "project_id": "pasahero-78208",
-    "storage_bucket": "pasahero-78208.firebasestorage.app"
+    "project_number": "464857061623",
+    "project_id": "pasahero-db",
+    "storage_bucket": "pasahero-db.firebasestorage.app"
   },
   "client": [
     {
       "client_info": {
-        "mobilesdk_app_id": "1:66461159713:android:4204216d4cf64fb68dee60",
+        "mobilesdk_app_id": "1:464857061623:android:10d97a90c6aca517b85bf2",
         "android_client_info": {
-          "package_name": "com.example.user"
+          "package_name": "com.pasahero.ap"
         }
       },
       "oauth_client": [
         {
-          "client_id": "66461159713-fg5mq4ls64mbt2i88uh9u66bn0bm0jdg.apps.googleusercontent.com",
+          "client_id": "464857061623-43gdtivbg77t98g0t1vsti1c6hb5hc96.apps.googleusercontent.com",
+          "client_type": 1,
+          "android_info": {
+            "package_name": "com.pasahero.ap",
+            "certificate_hash": "f647b2875e11ad46f569239ab37a81a5d0f1e3b5"
+          }
+        },
+        {
+          "client_id": "464857061623-ohoa4afqj73bka9l3mn4rv7mdrpe0ra0.apps.googleusercontent.com",
           "client_type": 3
         }
       ],
       "api_key": [
         {
-          "current_key": "AIzaSyAIYNAjmOZOSY558KqbtrF6nGF6hi_6CKE"
+          "current_key": "AIzaSyDVARrqYFWIy3i7wajAqKZP3ZqmfYG7sL0"
         }
       ],
       "services": {
         "appinvite_service": {
           "other_platform_oauth_client": [
             {
-              "client_id": "66461159713-fg5mq4ls64mbt2i88uh9u66bn0bm0jdg.apps.googleusercontent.com",
+              "client_id": "464857061623-ohoa4afqj73bka9l3mn4rv7mdrpe0ra0.apps.googleusercontent.com",
               "client_type": 3
+            },
+            {
+              "client_id": "464857061623-20ttrk6fp3bo9os1um434lr1g5vv8tsd.apps.googleusercontent.com",
+              "client_type": 2,
+              "ios_info": {
+                "bundle_id": "com.pasahero.app"
+              }
             }
           ]
         }

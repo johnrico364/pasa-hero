@@ -1,0 +1,7 @@
+# HTTP Headers for Flutter Web
+# This file is used by some static hosting services (e.g., Netlify, Cloudflare Pages)
+# to set HTTP headers
+
+/*
+  Cross-Origin-Opener-Policy: same-origin-allow-popups
+  Cross-Origin-Embedder-Policy: require-corp
