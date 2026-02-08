@@ -41,50 +41,51 @@ class DefaultFirebaseOptions {
   }
 
   static const FirebaseOptions web = FirebaseOptions(
-    apiKey: 'AIzaSyCg1ToWpDGw2rd0nDs1NDlcBF40tt68OOs',
-    appId: '1:66461159713:web:c20c140439a1ede58dee60',
-    messagingSenderId: '66461159713',
-    projectId: 'pasahero-78208',
-    authDomain: 'pasahero-78208.firebaseapp.com',
-    storageBucket: 'pasahero-78208.firebasestorage.app',
-    measurementId: 'G-L9ZG9TJZ85',
+    apiKey: 'AIzaSyBGeFznwFfmIdI4uLV2gfqTWVBx-ZMW0lg',
+    appId: '1:464857061623:web:40d74e8111583f08b85bf2',
+    messagingSenderId: '464857061623',
+    projectId: 'pasahero-db',
+    authDomain: 'pasahero-db.firebaseapp.com',
+    storageBucket: 'pasahero-db.firebasestorage.app',
   );
 
   static const FirebaseOptions android = FirebaseOptions(
-    apiKey: 'AIzaSyAIYNAjmOZOSY558KqbtrF6nGF6hi_6CKE',
-    appId: '1:66461159713:android:4204216d4cf64fb68dee60',
-    messagingSenderId: '66461159713',
-    projectId: 'pasahero-78208',
-    storageBucket: 'pasahero-78208.firebasestorage.app',
+    apiKey: 'AIzaSyDVARrqYFWIy3i7wajAqKZP3ZqmfYG7sL0',
+    appId: '1:464857061623:android:10d97a90c6aca517b85bf2',
+    messagingSenderId: '464857061623',
+    projectId: 'pasahero-db',
+    storageBucket: 'pasahero-db.firebasestorage.app',
   );
 
   static const FirebaseOptions ios = FirebaseOptions(
-    apiKey: 'AIzaSyDlSYC-50LvbPLSMN9qDujf4Nhpk5fwSp4',
-    appId: '1:66461159713:ios:abb26bb7cdb715d08dee60',
-    messagingSenderId: '66461159713',
-    projectId: 'pasahero-78208',
-    storageBucket: 'pasahero-78208.firebasestorage.app',
-    iosClientId: '66461159713-ici81fh4d7pgkb7588mjg323rp7353gu.apps.googleusercontent.com',
-    iosBundleId: 'com.example.user',
+    apiKey: 'AIzaSyAcxn_LYdvK6CJ9oM79FKRWk3iRlphB1Ts',
+    appId: '1:464857061623:ios:6107ed673c96dd72b85bf2',
+    messagingSenderId: '464857061623',
+    projectId: 'pasahero-db',
+    storageBucket: 'pasahero-db.firebasestorage.app',
+    androidClientId: '464857061623-43gdtivbg77t98g0t1vsti1c6hb5hc96.apps.googleusercontent.com',
+    iosClientId: '464857061623-20ttrk6fp3bo9os1um434lr1g5vv8tsd.apps.googleusercontent.com',
+    iosBundleId: 'com.pasahero.app',
   );
 
   static const FirebaseOptions macos = FirebaseOptions(
-    apiKey: 'AIzaSyDlSYC-50LvbPLSMN9qDujf4Nhpk5fwSp4',
-    appId: '1:66461159713:ios:abb26bb7cdb715d08dee60',
-    messagingSenderId: '66461159713',
-    projectId: 'pasahero-78208',
-    storageBucket: 'pasahero-78208.firebasestorage.app',
-    iosClientId: '66461159713-ici81fh4d7pgkb7588mjg323rp7353gu.apps.googleusercontent.com',
-    iosBundleId: 'com.example.user',
+    apiKey: 'AIzaSyAcxn_LYdvK6CJ9oM79FKRWk3iRlphB1Ts',
+    appId: '1:464857061623:ios:6107ed673c96dd72b85bf2',
+    messagingSenderId: '464857061623',
+    projectId: 'pasahero-db',
+    storageBucket: 'pasahero-db.firebasestorage.app',
+    androidClientId: '464857061623-43gdtivbg77t98g0t1vsti1c6hb5hc96.apps.googleusercontent.com',
+    iosClientId: '464857061623-20ttrk6fp3bo9os1um434lr1g5vv8tsd.apps.googleusercontent.com',
+    iosBundleId: 'com.pasahero.app',
   );
 
   static const FirebaseOptions windows = FirebaseOptions(
-    apiKey: 'AIzaSyCg1ToWpDGw2rd0nDs1NDlcBF40tt68OOs',
-    appId: '1:66461159713:web:f2ff62dc6c73aaa88dee60',
-    messagingSenderId: '66461159713',
-    projectId: 'pasahero-78208',
-    authDomain: 'pasahero-78208.firebaseapp.com',
-    storageBucket: 'pasahero-78208.firebasestorage.app',
-    measurementId: 'G-82T1SWYYBN',
+    apiKey: 'AIzaSyBGeFznwFfmIdI4uLV2gfqTWVBx-ZMW0lg',
+    appId: '1:464857061623:web:6a99bd738814bc2ab85bf2',
+    messagingSenderId: '464857061623',
+    projectId: 'pasahero-db',
+    authDomain: 'pasahero-db.firebaseapp.com',
+    storageBucket: 'pasahero-db.firebasestorage.app',
   );
+
 }
