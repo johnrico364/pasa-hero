@@ -22,3 +22,14 @@ export const loginUser = async (req, res) => {
     res.status(400).json({ success: false, message: error.message });
   }
 };
+
+export const logoutUser = async (req, res) => {
+  try {
+    const userId = req?.params?.id;
+
+    const user = await UserService.logoutUser(userId);
+    res.status(200).json({ success: true, data: user });
+  } catch (error) {
+    res.status(400).json({ success: false, message: error.message });
+  }
+};

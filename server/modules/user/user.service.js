@@ -72,4 +72,16 @@ export const UserService = {
 
     return user;
   },
+  // LOGOUT USER ====================================================================
+  async logoutUser(id) {
+    let user;
+
+    user = await User.findById(id);
+    if (!user) {
+      throw new Error("User not found");
+    }
+    user = await User.findByIdAndUpdate(id, { status: "inactive" });
+
+    return user;
+  },
 };
