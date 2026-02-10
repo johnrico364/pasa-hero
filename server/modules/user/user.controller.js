@@ -65,3 +65,15 @@ export const createAdminUser = async (req, res) => {
     res.status(400).json({ success: false, message: error.message });
   }
 };
+
+export const updateUser = async (req, res) => {
+  try {
+    const userId = req?.params?.id;
+    const userData = JSON.parse(req?.body?.data);
+
+    const user = await UserService.updateUser(userId, userData);
+    res.status(200).json({ success: true, data: user });
+  } catch (error) {
+    res.status(400).json({ success: false, message: error.message });
+  }
+} 

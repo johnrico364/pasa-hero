@@ -164,5 +164,33 @@ export const UserService = {
       role: role,
     });
     return createUser;
+  },
+  // UPDATE USER ===================================================================
+  async updateUser(id, data) {
+    // Get current user data to check existing profile_image
+    const user = await User.findById(id);
+    let oldImage = user?.profile_image;
+
+    // If a new image is being set and it's different from the old one, remove the old image (unless it's default.png)
+    if (data?.profile_image && oldImage && data.profile_image !== oldImage && oldImage !== "default.png") {
+      const imgPath = `uploads/${oldImage}`;
+      fs.unlink(imgPath, (err) => {
+        if (err) {
+          console.error(`Error deleting old user image: ${err}`);
+        } else {
+          console.log("Old user image deleted");
+        }
+      });
+    }
+
+    const updatedUser = await User.findByIdAndUpdate(
+      id,
+      {
+        ...data,
+        profile_image: data?.profile_image,
+      },
+      { new: true }
+    );
+    return updatedUser;
   }
 };

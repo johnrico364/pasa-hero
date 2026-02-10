@@ -1,6 +1,6 @@
 import express from "express";
 import upload from "../../middlewear/multer.js";
-import { signupUser, loginUser, logoutUser, getUserById, getAllUsers, createAdminUser } from "./user.controller.js";
+import { signupUser, loginUser, logoutUser, getUserById, getAllUsers, createAdminUser, updateUser } from "./user.controller.js";
 
 const router = express.Router();
 
@@ -8,7 +8,10 @@ const router = express.Router();
 router.post("/auth/signup", upload.single("image"), signupUser);
 router.post("/auth/signin", loginUser);
 router.patch("/auth/logout/:id", logoutUser);
-router.get('/auth/:id', getUserById);
+
+// can used for user and admin both
+router.get('/auth/:id', getUserById); // get user by id
+router.patch('/:id', upload.single("image"), updateUser);
 
 // User Management Routes
 router.get('/', getAllUsers);
