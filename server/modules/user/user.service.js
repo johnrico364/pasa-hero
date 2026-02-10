@@ -91,6 +91,10 @@ export const UserService = {
       throw new Error("User not found");
     }
     return user;
-  },
-  // ====
+    },
+  // GET ALL USERS ===================================================================
+  async getAllUsers() {
+    const users = await User.find();
+    return users;
+  }
 };

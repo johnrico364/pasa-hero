@@ -34,12 +34,21 @@ export const logoutUser = async (req, res) => {
   }
 };
 
-export const getUser = async (req, res) => {
+export const getUserById = async (req, res) => {
   try {
-    const userId = req?.user?.id;
+    const userId = req?.params?.id;
 
     const user = await UserService.getUserById(userId);
     res.status(200).json({ success: true, data: user });
+  } catch (error) {
+    res.status(400).json({ success: false, message: error.message });
+  }
+}
+
+export const getAllUsers = async (req, res) => {
+  try {
+    const users = await UserService.getAllUsers();
+    res.status(200).json({ success: true, data: users });
   } catch (error) {
     res.status(400).json({ success: false, message: error.message });
   }
