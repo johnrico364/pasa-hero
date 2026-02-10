@@ -7,6 +7,7 @@ import admin from './config/firebase.config.js';
 // Import routes
 import userRoutes from "./modules/user/user.route.js";
 import userFirebaseRoutes from "./modules/user_firebase/user_firebase.route.js";
+import routeRoutes from "./modules/route/route.route.js";
 
 const app = express();
 const PORT = process.env.PORT || 4000;
@@ -42,6 +43,7 @@ app.use("/images", express.static("images"));
 // API Routes
 app.use('/api/users/firebase', userFirebaseRoutes);
 app.use("/api/users", userRoutes);
+app.use("/api/routes", routeRoutes);
 
 // 404 handler
 app.use((req, res) => {
