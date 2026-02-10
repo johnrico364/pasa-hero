@@ -53,3 +53,15 @@ export const getAllUsers = async (req, res) => {
     res.status(400).json({ success: false, message: error.message });
   }
 }
+
+export const createAdminUser = async (req, res) => {
+  try {
+    const userData = JSON.parse(req?.body?.data);
+    const userImg = req.file?.filename;
+
+    const user = await UserService.createAdminUser(userData, userImg);
+    res.status(201).json({ success: true, data: user });
+  } catch (error) {
+    res.status(400).json({ success: false, message: error.message });
+  }
+};

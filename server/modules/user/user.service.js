@@ -96,5 +96,73 @@ export const UserService = {
   async getAllUsers() {
     const users = await User.find();
     return users;
+  },
+  // CREATE ADMIN USER ===============================================================
+  async createAdminUser(data, userImage) {
+    let img_path;
+    if (userImage) {
+      img_path = path.join("images/users", userImage);
+    }
+
+    // Validations
+    if (!validator.isEmail(data.email)) {
+      if (img_path) {
+        fs.unlink(img_path, (err) => {
+          if (err) throw err;
+          console.log("user img delete");
+        });
+      }
+      throw Error("Invalid Email Format");
+    }
+    if (!validator.isStrongPassword(data.password)) {
+      if (img_path) {
+        fs.unlink(img_path, (err) => {
+          if (err) throw err;
+          console.log("user img delete");
+        });
+      }
+      throw Error(
+        "Password must contains one capital letter and one special character",
+      );
+    }
+
+    const checkEmail = await User.findOne({ email: data.email });
+    if (checkEmail) {
+      if (img_path) {
+        fs.unlink(img_path, (err) => {
+          if (err) throw err;
+          console.log("user img delete");
+        });
+      }
+      const error = new Error("Email already exists");
+      error.statusCode = 400;
+      throw error;
+    }
+
+    // Validate admin role
+    const validAdminRoles = ["super admin", "operator", "terminal admin"];
+    const role = data?.role || "user";
+    if (!validAdminRoles.includes(role)) {
+      if (img_path) {
+        fs.unlink(img_path, (err) => {
+          if (err) throw err;
+          console.log("user img delete");
+        });
+      }
+      throw Error("Invalid admin role. Must be one of: super admin, operator, terminal admin");
+    }
+
+    // Hash and Salt Password
+    const salt = await bcrypt.genSalt(10);
+    const hashPassword = await bcrypt.hash(data.password, salt);
+
+    // Create Admin User
+    const createUser = await User.create({
+      ...data,
+      password: hashPassword,
+      profile_image: userImage,
+      role: role,
+    });
+    return createUser;
   }
 };
