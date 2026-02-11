@@ -9,9 +9,9 @@ import userRoutes from "./modules/user/user.route.js";
 import userFirebaseRoutes from "./modules/user_firebase/user_firebase.route.js";
 import terminalRoutes from "./modules/terminal/terminal.route.js";
 import routeRoutes from "./modules/route/route.route.js";
+import busRoutes from "./modules/bus/bus.route.js";
 
 const app = express();
-const PORT = process.env.PORT || 4000;
 
 // Middleware
 app.use(cors({
@@ -46,6 +46,7 @@ app.use('/api/users/firebase', userFirebaseRoutes);
 app.use("/api/users", userRoutes);
 app.use("/api/terminals", terminalRoutes);
 app.use("/api/routes", routeRoutes);
+app.use("/api/buses", busRoutes);
 
 // 404 handler
 app.use((req, res) => {
