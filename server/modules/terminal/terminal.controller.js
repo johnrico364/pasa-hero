@@ -18,3 +18,13 @@ export const createTerminal = async (req, res) => {
     res.status(400).json({ success: false, message: error.message });
   }
 };
+
+export const getTerminalById = async (req, res) => {
+  try {
+    const terminalId = req.params.id;
+    const terminal = await TerminalService.getTerminalById(terminalId);
+    res.status(200).json({ success: true, data: terminal });
+  } catch (error) {
+    res.status(400).json({ success: false, message: error.message });
+  }
+};

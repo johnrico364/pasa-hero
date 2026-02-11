@@ -20,8 +20,16 @@ export const TerminalService = {
     if (nearTerminal) {
       throw new Error('A terminal is already registered at or very near this location.');
     }
-    
+
     const terminal = await Terminal.create(terminalData);
+    return terminal;
+  },
+  // GET TERMINAL BY ID ===================================================================
+  async getTerminalById(terminalId) {
+    const terminal = await Terminal.findById(terminalId);
+    if (!terminal) {
+      throw new Error('Terminal not found.');
+    }
     return terminal;
   },
 };
