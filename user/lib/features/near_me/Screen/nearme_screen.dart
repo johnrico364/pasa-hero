@@ -41,7 +41,7 @@ class _NearMeContentState extends State<_NearMeContent> {
   Widget build(BuildContext context) {
     return Scaffold(
       body: Container(
-        color: const Color(0xFFF9FAFB),
+        color: const Color(0xFFEDF3F8),
         child: Column(
           children: [
             // Custom rounded header container with title and search bar
@@ -49,8 +49,8 @@ class _NearMeContentState extends State<_NearMeContent> {
               decoration: const BoxDecoration(
                 color: Color(0xFF1E3A8A),
                 borderRadius: BorderRadius.only(
-                  bottomLeft: Radius.circular(20),
-                  bottomRight: Radius.circular(20),
+                  bottomLeft: Radius.circular(45),
+                  bottomRight: Radius.circular(45),
                 ),
               ),
               child: SafeArea(
