@@ -6,8 +6,24 @@ const busAssignmentSchema = new mongoose.Schema(
     driver_id: { type: String, ref: "Driver", required: true },
     operator_user_id: { type: String, ref: "Driver", required: true }, //Bus operator ni
     route_id: { type: String, ref: "Route", required: true },
-    terminal_id: { type: String, ref: "Terminal", required: true },
-    status: { type: String, default: "active", enum: ["active", "ended"] },
+
+    assignment_date: { type: Date, required: true },
+    status: {
+      type: String,
+      default: "scheduled",
+      enum: [
+        "scheduled",
+        "active",
+        "arrival_pending",
+        "arrived",
+        "departed",
+        "completed",
+        "cancelled",
+      ],
+    },
+
+    arrival_time: { type: Date, default: null },
+    departure_time: { type: Date, default: null },
   },
   { timestamps: true },
 );

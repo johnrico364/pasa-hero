@@ -7,8 +7,28 @@ const terminalLogSchema = new mongoose.Schema(
     event_type: {
       type: String,
       required: true,
-      enum: ["arrival", "departure", "delay"],
+      enum: [
+        "arrival_reported",
+        "arrival_confirmed",
+        "departure_reported",
+        "departure_confirmed",
+        "auto_detected",
+      ],
     },
+
+    reported_by: { type: String, ref: "User", default: null },
+    confirmed_by: { type: String, ref: "User", default: null },
+    auto_detected: { type: Boolean, default: false },
+
+    status: {
+      type: String,
+      enum: ["pending_confirmation", "confirmed", "rejected"],
+      default: "pending_confirmation",
+    },
+
+    event_time: { type: Date, required: true },
+    confirmation_time: { type: Date, default: null },
+
     remarks: { type: String },
   },
   { timestamps: true },
