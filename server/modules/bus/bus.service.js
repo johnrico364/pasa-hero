@@ -16,4 +16,24 @@ export const BusService = {
     }
     return bus;
   },
+  // CREATE BUS ===================================================================
+  async createBus(busData) {
+    const existing = await Bus.findOne({
+      $or: [
+        { bus_number: busData.bus_number },
+        { plate_number: busData.plate_number },
+      ],
+    });
+    if (existing) {
+      const error = new Error(
+        existing.plate_number === busData.plate_number
+          ? "A bus with this plate number already exists."
+          : "A bus with this bus number already exists.",
+      );
+      error.statusCode = 409;
+      throw error;
+    }
+    const bus = await Bus.create(busData);
+    return bus;
+  },
 };
