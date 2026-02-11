@@ -8,3 +8,13 @@ export const getAllRoutes = async (req, res) => {
         res.status(400).json({ success: false, message: error.message });
     }
 };
+
+export const createRoute = async (req, res) => {
+    try {
+        const routeData = req.body;
+        const route = await RouteService.createRoute(routeData);
+        res.status(201).json({ success: true, data: route });
+    } catch (error) {
+        res.status(400).json({ success: false, message: error.message });
+    }
+};
