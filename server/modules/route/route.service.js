@@ -15,7 +15,7 @@ export const RouteService = {
       error.statusCode = 400;
       throw error;
     }
-    
+
     const duplicateRoute = await Route.findOne({
       start_terminal_id: routeData.start_terminal_id,
       end_terminal_id: routeData.end_terminal_id,
@@ -27,6 +27,18 @@ export const RouteService = {
     }
 
     const route = await Route.create(routeData);
+    return route;
+  },
+  // GET ROUTE BY ID ===================================================================
+  async getRouteById(id) {
+    const route = await Route.findById(id)
+      .populate("start_terminal_id")
+      .populate("end_terminal_id");
+    if (!route) {
+      const error = new Error("Route not found.");
+      error.statusCode = 404;
+      throw error;
+    }
     return route;
   },
 };
