@@ -32,4 +32,34 @@ export const TerminalService = {
     }
     return terminal;
   },
+  // UPDATE TERMINAL BY ID ===================================================================
+  async updateTerminalById(terminalId, updateData) {
+    const terminal = await Terminal.findById(terminalId);
+    if (!terminal) {
+      throw new Error('Terminal not found.');
+    }
+
+    if (updateData.terminal_name && updateData.terminal_name !== terminal.terminal_name) {
+      const existingTerminal = await Terminal.findOne({ terminal_name: updateData.terminal_name });
+      if (existingTerminal) {
+        throw new Error(`Terminal name "${updateData.terminal_name}" already exists.`);
+      }
+    }
+
+    if ((updateData.location_lat != null || updateData.location_lng != null) && (updateData.location_lat !== terminal.location_lat || updateData.location_lng !== terminal.location_lng)) {
+      const lat = updateData.location_lat ?? terminal.location_lat;
+      const lng = updateData.location_lng ?? terminal.location_lng;
+      const nearTerminal = await Terminal.findOne({
+        _id: { $ne: terminalId },
+        location_lat: { $gte: lat - 0.0001, $lte: lat + 0.0001 },
+        location_lng: { $gte: lng - 0.0001, $lte: lng + 0.0001 },
+      });
+      if (nearTerminal) {
+        throw new Error('A terminal is already registered at or very near this location.');
+      }
+    }
+
+    const updated = await Terminal.findByIdAndUpdate(terminalId, updateData, { new: true });
+    return updated;
+  },
 };
