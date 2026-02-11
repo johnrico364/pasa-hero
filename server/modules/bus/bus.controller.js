@@ -8,3 +8,14 @@ export const getAllBuses = async (req, res) => {
     res.status(400).json({ success: false, message: error.message });
   }
 };
+
+export const getBusById = async (req, res) => {
+  try {
+    const { id } = req.params;
+    const bus = await BusService.getBusById(id);
+    res.status(200).json({ success: true, data: bus });
+  } catch (error) {
+    const statusCode = error.statusCode || 400;
+    res.status(statusCode).json({ success: false, message: error.message });
+  }
+};
