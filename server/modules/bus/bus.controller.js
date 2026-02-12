@@ -30,3 +30,15 @@ export const createBus = async (req, res) => {
     res.status(statusCode).json({ success: false, message: error.message });
   }
 };
+
+export const updateBusById = async (req, res) => {
+  try {
+    const { id } = req.params;
+    const updateData = req.body;
+    const bus = await BusService.updateBusById(id, updateData);
+    res.status(200).json({ success: true, data: bus });
+  } catch (error) {
+    const statusCode = error.statusCode || 400;
+    res.status(statusCode).json({ success: false, message: error.message });
+  }
+};
