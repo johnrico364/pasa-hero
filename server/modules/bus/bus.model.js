@@ -10,6 +10,8 @@ const busSchema = new mongoose.Schema(
       default: "active",
       enum: ["active", "maintenance", "out of service"],
     },
+    is_deleted: { type: Boolean, default: false },
+    deleted_at: { type: Date, default: null },
   },
   { timestamps: true },
 );
