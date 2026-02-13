@@ -9,14 +9,53 @@ import userRoutes from "./modules/user/user.route.js";
 import userFirebaseRoutes from "./modules/user_firebase/user_firebase.route.js";
 import terminalRoutes from "./modules/terminal/terminal.route.js";
 import routeRoutes from "./modules/route/route.route.js";
+import otpRoutes from "./modules/otp/otp.route.js";
 
 const app = express();
 const PORT = process.env.PORT || 4000;
 
 // Middleware
+// CORS configuration - allow all localhost ports for development
+const allowedOrigins = process.env.ALLOWED_ORIGINS?.split(',').map(o => o.trim()) || [
+  'http://localhost:3000', 
+  'http://localhost:5173',
+  'http://localhost:8080',
+  'http://localhost:5000',
+  'http://localhost:51140', // Flutter web default port
+  /^http:\/\/localhost:\d+$/, // Allow any localhost port
+  'https://pasahero-db.firebaseapp.com',
+  'https://pasahero-db.web.app',
+];
+
 app.use(cors({
-  origin: process.env.ALLOWED_ORIGINS?.split(',') || ['http://localhost:3000', 'http://localhost:5173'],
+  origin: function (origin, callback) {
+    // Allow requests with no origin (like mobile apps or curl requests)
+    if (!origin) return callback(null, true);
+    
+    // Check if origin matches any allowed origin
+    const isAllowed = allowedOrigins.some(allowed => {
+      if (typeof allowed === 'string') {
+        return origin === allowed;
+      } else if (allowed instanceof RegExp) {
+        return allowed.test(origin);
+      }
+      return false;
+    });
+    
+    if (isAllowed) {
+      callback(null, true);
+    } else {
+      // In development, allow all localhost origins
+      if (origin.startsWith('http://localhost:') || origin.startsWith('http://127.0.0.1:')) {
+        callback(null, true);
+      } else {
+        callback(new Error('Not allowed by CORS'));
+      }
+    }
+  },
   credentials: true,
+  methods: ['GET', 'POST', 'PUT', 'DELETE', 'OPTIONS'],
+  allowedHeaders: ['Content-Type', 'Authorization'],
 }));
 dotenv.config();
 app.use(express.json());
@@ -46,6 +85,7 @@ app.use('/api/users/firebase', userFirebaseRoutes);
 app.use("/api/users", userRoutes);
 app.use("/api/terminals", terminalRoutes);
 app.use("/api/routes", routeRoutes);
+app.use("/api/otp", otpRoutes);
 
 // 404 handler
 app.use((req, res) => {
