@@ -73,9 +73,22 @@ app.get('/health', (req, res) => {
 
 // MongoDB Connection
 const _dbURI = process.env.MONGO_DB_URI;
-mongoose.connect(_dbURI).then(() => {
-  console.log("Connected to Mongo DB");
-});
+if (!_dbURI) {
+  console.warn('⚠️  MONGO_DB_URI is not set in .env file');
+  console.warn('   MongoDB connection will not be established');
+  console.warn('   Some features may not work without MongoDB');
+  console.warn('   To fix: Add MONGO_DB_URI=your_mongodb_connection_string to server/.env file');
+} else {
+  mongoose.connect(_dbURI)
+    .then(() => {
+      console.log("✅ Connected to Mongo DB");
+    })
+    .catch((error) => {
+      console.error('❌ MongoDB connection failed:', error.message);
+      console.error('   Please check your MONGO_DB_URI in .env file');
+      console.error('   Server will continue running, but database features will not work');
+    });
+}
 
 // Image static folder
 app.use("/images", express.static("images"));

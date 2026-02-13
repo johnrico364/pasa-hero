@@ -818,24 +818,55 @@ class AuthService {
       });
       
       // Send OTP via email using the backend server
+      // Server URL - update this to your server URL
+      // For local development: http://localhost:3000
+      // For production: your production server URL
+      // You can also set this via environment variable: --dart-define=SERVER_URL=http://your-server.com
+      String serverUrl = const String.fromEnvironment(
+        'SERVER_URL',
+        defaultValue: 'http://localhost:3000',
+      );
+      
+      // For web, if running on same machine, use localhost
+      // For production, you'll need to set the actual server URL
+      if (kIsWeb && serverUrl == 'http://localhost:3000') {
+        // Try to detect if we're in development or production
+        // In production, you should set SERVER_URL via --dart-define
+        serverUrl = 'http://localhost:3000';
+      }
+      
       try {
-        // Server URL - update this to your server URL
-        // For local development: http://localhost:3000
-        // For production: your production server URL
-        // You can also set this via environment variable: --dart-define=SERVER_URL=http://your-server.com
-        String serverUrl = const String.fromEnvironment(
-          'SERVER_URL',
-          defaultValue: 'http://localhost:3000',
-        );
         
-        // For web, if running on same machine, use localhost
-        // For production, you'll need to set the actual server URL
-        if (kIsWeb && serverUrl == 'http://localhost:3000') {
-          // Try to detect if we're in development or production
-          // In production, you should set SERVER_URL via --dart-define
-          serverUrl = 'http://localhost:3000';
+        // First, try to check if server is reachable
+        try {
+          final statusResponse = await http.get(
+            Uri.parse('$serverUrl/api/otp/status'),
+          ).timeout(
+            const Duration(seconds: 5),
+            onTimeout: () {
+              throw Exception('Server status check timed out');
+            },
+          );
+          
+          if (statusResponse.statusCode != 200) {
+            print('⚠️ Server status check failed: ${statusResponse.statusCode}');
+          }
+        } catch (statusError) {
+          final errorStr = statusError.toString().toLowerCase();
+          if (errorStr.contains('connection refused') || 
+              errorStr.contains('failed host lookup') ||
+              errorStr.contains('network is unreachable') ||
+              errorStr.contains('failed to fetch') ||
+              errorStr.contains('clientexception') ||
+              errorStr.contains('socketexception')) {
+            print('❌ Server status check failed: $statusError');
+            print('   Server URL: $serverUrl');
+            print('   ⚠️  Server appears to be offline or unreachable');
+            print('   Will attempt to send OTP anyway, but it will likely fail...');
+            // Don't throw - continue to try sending anyway
+          }
         }
-        
+
         final response = await http.post(
           Uri.parse('$serverUrl/api/otp/send'),
           headers: {
@@ -848,14 +879,74 @@ class AuthService {
         ).timeout(
           const Duration(seconds: 10),
           onTimeout: () {
-            throw Exception('Email sending request timed out');
+            throw Exception('Email sending request timed out. Server may be slow or unreachable.');
           },
         );
         
         if (response.statusCode != 200) {
+          final responseBody = jsonDecode(response.body);
+          print('⚠️ OTP email sending failed: ${response.statusCode}');
+          print('   Error: ${responseBody['error'] ?? 'Unknown error'}');
+          print('   Message: ${responseBody['message'] ?? 'No message'}');
+          if (responseBody['troubleshooting'] != null) {
+            print('   Troubleshooting:');
+            if (responseBody['troubleshooting'] is List) {
+              for (var tip in responseBody['troubleshooting']) {
+                print('     - $tip');
+              }
+            } else {
+              print('     - ${responseBody['troubleshooting']}');
+            }
+          }
           // Don't throw - OTP is stored, email sending is optional
+        } else {
+          print('✅ OTP email sent successfully');
         }
       } catch (e) {
+        final errorStr = e.toString().toLowerCase();
+        
+        // Provide helpful error messages for connection issues
+        if (errorStr.contains('connection refused') || 
+            errorStr.contains('failed host lookup') ||
+            errorStr.contains('network is unreachable') ||
+            errorStr.contains('failed to fetch') ||
+            errorStr.contains('clientexception') ||
+            errorStr.contains('socketexception')) {
+          print('❌ Server connection failed: $e');
+          print('   Server URL: $serverUrl');
+          print('   Error Type: Connection Refused (Server not running)');
+          print('');
+          print('   🔧 Troubleshooting Steps:');
+          print('   1. Start the server:');
+          print('      - Open a terminal/command prompt');
+          print('      - Navigate to: cd server');
+          print('      - Run: npm run dev');
+          print('      - Wait for: "Listening to port 3000" message');
+          print('');
+          print('   2. Verify server is running:');
+          print('      - Open in browser: $serverUrl/health');
+          print('      - Should show: {"status":"ok",...}');
+          print('');
+          print('   3. Check server port:');
+          print('      - Default port: 3000');
+          print('      - Check server/.env file for PORT setting');
+          print('      - If different port, update SERVER_URL in client');
+          print('');
+          print('   4. For web apps:');
+          print('      - Ensure server CORS allows your origin');
+          print('      - Check browser console for CORS errors');
+          print('');
+          print('   ⚠️  Note: OTP is saved in Firestore, but email cannot be sent until server is running.');
+        } else if (errorStr.contains('timeout')) {
+          print('⏱️ Request timed out: $e');
+          print('   Server URL: $serverUrl');
+          print('   The server may be slow or unreachable');
+          print('   Check server logs for errors');
+        } else {
+          print('⚠️ OTP email sending error: $e');
+          print('   Server URL: $serverUrl');
+          print('   Check server logs for more details');
+        }
         // Don't throw - OTP is stored in Firestore, email sending failure is not critical
       }
     } catch (e) {
