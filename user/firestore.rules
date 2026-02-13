@@ -1,0 +1,24 @@
+rules_version = '2';
+service cloud.firestore {
+  match /databases/{database}/documents {
+    // Users collection - authenticated users can read/write their own data
+    match /users/{userId} {
+      allow read: if request.auth != null && request.auth.uid == userId;
+      allow write: if request.auth != null && request.auth.uid == userId;
+      allow create: if request.auth != null;
+    }
+    
+    // OTP verifications - allow anyone to create/read (for email verification before account creation)
+    match /otp_verifications/{email} {
+      allow read: if true; // Allow reading to verify OTP
+      allow create: if true; // Allow creating OTP (before user is authenticated)
+      allow update: if true; // Allow updating to mark as verified
+      allow delete: if true; // Allow deleting expired OTPs
+    }
+    
+    // Default deny all other access
+    match /{document=**} {
+      allow read, write: if false;
+    }
+  }
+}

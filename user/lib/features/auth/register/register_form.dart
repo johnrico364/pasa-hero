@@ -5,6 +5,7 @@ import '../auth_bloc/auth_bloc_bloc.dart';
 import '../auth_bloc/auth_bloc_event.dart';
 import '../auth_bloc/auth_bloc_state.dart';
 import '../../near_me/Screen/nearme_screen.dart';
+import '../otp/otp_card.dart';
 
 class RegisterForm extends StatefulWidget {
   final TextEditingController firstNameController;
@@ -28,6 +29,13 @@ class _RegisterFormState extends State<RegisterForm> {
   bool _obscurePassword = true;
   String? _validationError;
   bool _hasNavigated = false; // Flag to prevent multiple navigations
+  bool _showOTPCard = false; // Flag to show/hide OTP card
+  String? _otpEmail;
+  String? _otpPassword;
+  String? _otpFirstName;
+  String? _otpLastName;
+  bool _isGoogleSignUp = false;
+  String? _googleDisplayName;
 
   @override
   void dispose() {
@@ -38,14 +46,67 @@ class _RegisterFormState extends State<RegisterForm> {
   Widget build(BuildContext context) {
     return BlocListener<AuthBlocBloc, AuthBlocState>(
       listener: (context, state) {
-        // Navigate to near me screen on successful registration
-        if (state.isAuthenticated && state.user != null && !_hasNavigated && !state.isLoading) {
-          _hasNavigated = true; // Set flag to prevent multiple navigations
+        // Handle errors
+        if (state.error != null && !_hasNavigated) {
+          setState(() {
+            _validationError = state.error.toString().replaceAll('Exception: ', '');
+          });
+        }
+        
+        // Navigate to OTP screen when OTP is sent (register event completes without error and not authenticated)
+        if (!state.isLoading && !state.isAuthenticated && state.error == null && !_hasNavigated) {
+          // Check if Google sign-up OTP was sent first (priority check)
+          final bloc = context.read<AuthBlocBloc>();
+          
+          if (bloc.pendingGoogleEmail != null) {
+            _hasNavigated = true;
+            final googleEmail = bloc.pendingGoogleEmail!;
+            final googleDisplayName = bloc.pendingGoogleDisplayName ?? '';
+            bloc.resetPendingGoogleInfo();
+            setState(() {
+              _showOTPCard = true;
+              _otpEmail = googleEmail;
+              _otpPassword = null;
+              _otpFirstName = null;
+              _otpLastName = null;
+              _isGoogleSignUp = true;
+              _googleDisplayName = googleDisplayName;
+            });
+            return; // Exit early to prevent regular registration check
+          }
+          
+          // Check if we just sent OTP (regular register was triggered)
+          final email = widget.emailController.text.trim();
+          final password = widget.passwordController.text;
+          final firstName = widget.firstNameController.text.trim();
+          final lastName = widget.lastNameController.text.trim();
+          if (email.isNotEmpty && password.isNotEmpty && firstName.isNotEmpty && lastName.isNotEmpty) {
+            _hasNavigated = true;
+            setState(() {
+              _showOTPCard = true;
+              _otpEmail = email;
+              _otpPassword = password;
+              _otpFirstName = firstName;
+              _otpLastName = lastName;
+              _isGoogleSignUp = false;
+              _googleDisplayName = null;
+            });
+          }
+        }
+        // Navigate to near me screen on successful registration (after OTP verification)
+        if (state.isAuthenticated && state.user != null && !state.isLoading) {
+          // Close OTP card if it's open
+          if (_showOTPCard) {
+            setState(() {
+              _showOTPCard = false;
+            });
+          }
+          
           // Use a post-frame callback to ensure navigation happens after build
           WidgetsBinding.instance.addPostFrameCallback((_) async {
             if (!mounted) return; // Don't navigate if widget is disposed
-            // Small delay to ensure state is fully updated
-            await Future.delayed(const Duration(milliseconds: 100));
+            // Small delay to ensure state is fully updated and card is closed
+            await Future.delayed(const Duration(milliseconds: 200));
             if (!mounted) return; // Check again after delay
             Navigator.of(context).pushAndRemoveUntil(
               MaterialPageRoute(
@@ -62,8 +123,10 @@ class _RegisterFormState extends State<RegisterForm> {
           });
         }
       },
-      child: Container(
-        color: const Color(0xFFF5F5F5),
+      child: Stack(
+        children: [
+          Container(
+            color: const Color(0xFFF5F5F5),
         child: LayoutBuilder(
           builder: (context, constraints) {
             final screenWidth = MediaQuery.of(context).size.width;
@@ -487,6 +550,7 @@ class _RegisterFormState extends State<RegisterForm> {
                           onPressed: state.isLoading
                               ? null
                               : () {
+                                  _hasNavigated = false; // Reset flag for Google sign-up
                                   context.read<AuthBlocBloc>().add(GoogleSignUpEvent());
                                 },
                           style: OutlinedButton.styleFrom(
@@ -596,6 +660,28 @@ class _RegisterFormState extends State<RegisterForm> {
             );
           },
         ),
+          ),
+          // OTP Card Overlay
+          if (_showOTPCard && _otpEmail != null)
+            Container(
+              color: Colors.black.withOpacity(0.5),
+              child: OTPCard(
+                email: _otpEmail!,
+                password: _otpPassword,
+                firstName: _otpFirstName,
+                lastName: _otpLastName,
+                isRegistration: true,
+                isGoogleSignUp: _isGoogleSignUp,
+                googleDisplayName: _googleDisplayName,
+                onClose: () {
+                  setState(() {
+                    _showOTPCard = false;
+                    _hasNavigated = false;
+                  });
+                },
+              ),
+            ),
+        ],
       ),
     );
   }
