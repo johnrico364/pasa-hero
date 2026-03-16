@@ -4,6 +4,8 @@ import 'package:google_maps_flutter/google_maps_flutter.dart';
 import '../../../core/models/bus_stop.dart';
 import '../../../core/services/bus_stops_service.dart';
 import '../../../core/services/location_service.dart';
+import '../../../core/services/location_cache_service.dart';
+import '../../../core/services/map/map_service.dart';
 import '../../../shared/bottom_navBar.dart';
 import '../../map/map.dart';
 import '../Module/free_ride.dart';
@@ -43,9 +45,14 @@ class _NearMeContentState extends State<_NearMeContent> {
   LatLng? _routeOrigin;
   LatLng? _routeDestination;
   bool _destinationsLoading = true;
+  double? _routeDistanceMeters; // Distance from POINT_A (nearest bus stop) to POINT_B (destination)
+  String? _routeDistanceText; // Formatted distance text
+  bool _isCalculatingDistance = false;
+  bool _hasLoadedOnce = false; // Track if we've loaded data at least once
 
   final LocationService _locationService = LocationService();
   final BusStopsService _busStopsService = BusStopsService();
+  final LocationCacheService _locationCache = LocationCacheService.instance;
 
   /// Fallback list when API hasn't loaded yet; includes lat/lng for route drawing.
   static const List<Map<String, dynamic>> _terminalsFallback = [
@@ -71,40 +78,110 @@ class _NearMeContentState extends State<_NearMeContent> {
     _sheetController = DraggableScrollableController();
     _sheetController.addListener(() => _updateFromSheetExtent(_sheetController.size));
     WidgetsBinding.instance.addPostFrameCallback((_) {
-      if (mounted) _updateFromSheetExtent(_sheetController.size);
-      _loadBusStopsAsDestinations();
+      if (mounted) {
+        _updateFromSheetExtent(_sheetController.size);
+        // Try to load from cache first, then fetch if needed
+        _loadFromCacheOrFetch();
+      }
     });
   }
 
+  /// Loads from cache first, then fetches if cache is expired or unavailable.
+  Future<void> _loadFromCacheOrFetch() async {
+    // Check if we have cached location (valid for up to 5 minutes for near me page)
+    // Use longer cache duration for near me page to avoid reloading when navigating back
+    const cacheDuration = Duration(minutes: 5);
+    final cachedPosition = _locationCache.getCachedLocationWithMaxAge(cacheDuration);
+    
+    // Use cached location if available and valid
+    if (cachedPosition != null) {
+      final cacheAge = _locationCache.getCacheAge();
+      print('📍 [NearMe] Using cached location (${cacheAge?.inMinutes ?? 0} min old)');
+      if (mounted) {
+        setState(() {
+          _userPosition = cachedPosition;
+          _destinationsLoading = true;
+        });
+        // Load bus stops with cached location
+        await _loadBusStopsWithPosition(cachedPosition);
+        _hasLoadedOnce = true;
+        return;
+      }
+    }
+    
+    // If no valid cache or first load, fetch fresh location
+    await _loadBusStopsAsDestinations();
+  }
+
   /// Loads bus stops and sets them as destination options; also captures closest stop for route origin.
+  /// Fetches fresh location if cache is not available.
   Future<void> _loadBusStopsAsDestinations() async {
+    if (_hasLoadedOnce && _userPosition != null) {
+      // If we already have data and it's been loaded once, don't reload
+      print('📍 [NearMe] Data already loaded, skipping reload');
+      return;
+    }
+    
     try {
       Position? position;
       try {
         final enabled = await _locationService.isLocationServiceEnabled();
         final hasPermission = await _locationService.requestPermission();
         if (enabled && hasPermission) {
-          position = await _locationService.getCurrentPosition(
+          final fetchedPosition = await _locationService.getCurrentPosition(
             preferLowAccuracy: true,
             useCachedPosition: true,
           ).timeout(const Duration(seconds: 8));
+          
+          position = fetchedPosition;
+          
+          // Save to cache after getting position
+          await _locationCache.saveLocation(fetchedPosition);
+          print('📍 [NearMe] Location saved to cache');
         }
-      } catch (_) {}
+      } catch (_) {
+        // Position remains null if fetch fails
+      }
+      
       if (position != null && mounted) {
-        _userPosition = position;
-        final result = await _busStopsService.getBusStopsWithClosestHighlighted(
-          position.latitude,
-          position.longitude,
-        );
-        if (!mounted) return;
-        _applyDestinationsFromStops(result.stops, result.closestStopId);
+        await _loadBusStopsWithPosition(position);
+        _hasLoadedOnce = true;
         return;
       }
+      
+      // Fallback: load Cebu stops without location
       final result = await _busStopsService.getBusStopsInCebu();
       if (!mounted) return;
       _applyDestinationsFromStops(result.stops, null);
+      _hasLoadedOnce = true;
     } catch (e) {
-      if (mounted) setState(() => _destinationsLoading = false);
+      if (mounted) {
+        setState(() => _destinationsLoading = false);
+      }
+    }
+  }
+
+  /// Loads bus stops using the provided position.
+  Future<void> _loadBusStopsWithPosition(Position position) async {
+    if (!mounted) return;
+    
+    setState(() {
+      _userPosition = position;
+      _destinationsLoading = true;
+    });
+    
+    try {
+      final result = await _busStopsService.getBusStopsWithClosestHighlighted(
+        position.latitude,
+        position.longitude,
+      );
+      if (!mounted) return;
+      _applyDestinationsFromStops(result.stops, result.closestStopId);
+    } catch (e) {
+      print('⚠️ [NearMe] Error loading bus stops: $e');
+      if (mounted) {
+        setState(() => _destinationsLoading = false);
+      }
     }
   }
 
@@ -133,6 +210,73 @@ class _NearMeContentState extends State<_NearMeContent> {
       _closestStopLatLng = closestLatLng;
       _destinationsLoading = false;
     });
+  }
+
+  /// Calculates accurate street distance from POINT_A (nearest bus stop) to POINT_B (destination)
+  /// using Google Maps API.
+  Future<void> _calculateRouteDistance(LatLng pointA, LatLng pointB) async {
+    if (!mounted) return;
+    
+    setState(() {
+      _isCalculatingDistance = true;
+    });
+    
+    if (_isCalculatingDistance) {
+      print('📍 [NearMe] Starting distance calculation...');
+    }
+    
+    try {
+      print('📍 [NearMe] Calculating distance from POINT_A (nearest bus stop) to POINT_B (destination)');
+      print('   POINT_A: (${pointA.latitude}, ${pointA.longitude})');
+      print('   POINT_B: (${pointB.latitude}, ${pointB.longitude})');
+      
+      final routeResult = await MapService.getRouteWithDistance(pointA, pointB);
+      
+      if (!mounted) return;
+      
+      if (routeResult != null) {
+        setState(() {
+          _routeDistanceMeters = routeResult.distanceMeters;
+          _routeDistanceText = routeResult.distanceText;
+          _isCalculatingDistance = false;
+        });
+        
+        print('✅ [NearMe] Route distance calculated:');
+        print('   Distance: ${routeResult.distanceText} (${_routeDistanceMeters?.toStringAsFixed(0) ?? 'N/A'} meters)');
+        if (routeResult.durationText != null) {
+          print('   Duration: ${routeResult.durationText}');
+        }
+        
+        // Log stored distance for debugging
+        if (_routeDistanceMeters != null) {
+          print('   Stored distance: ${_routeDistanceMeters!.toStringAsFixed(0)} meters');
+        }
+        
+        // Show snackbar with distance information using stored fields
+        if (mounted && _routeDistanceText != null) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            SnackBar(
+              content: Text(
+                'Route distance: $_routeDistanceText${routeResult.durationText != null ? ' • ${routeResult.durationText}' : ''}',
+              ),
+              duration: const Duration(seconds: 3),
+              backgroundColor: Colors.blue,
+            ),
+          );
+        }
+      } else {
+        setState(() {
+          _isCalculatingDistance = false;
+        });
+        print('⚠️ [NearMe] Could not calculate route distance');
+      }
+    } catch (e) {
+      if (!mounted) return;
+      setState(() {
+        _isCalculatingDistance = false;
+      });
+      print('❌ [NearMe] Error calculating route distance: $e');
+    }
   }
 
   @override
@@ -194,12 +338,17 @@ class _NearMeContentState extends State<_NearMeContent> {
                   destinations: _destinations,
                   selectedDestination: _selectedTo,
                   isLoading: _destinationsLoading,
-                  onDestinationSelected: (t) {
+                  onDestinationSelected: (t) async {
                     final lat = t['lat'];
                     final lng = t['lng'];
                     final hasCoords = lat != null && lng != null && lat is num && lng is num;
+                    
                     setState(() {
                       _selectedTo = t;
+                      _routeDistanceMeters = null;
+                      _routeDistanceText = null;
+                      _isCalculatingDistance = false;
+                      
                       if (hasCoords) {
                         _routeDestination = LatLng(lat.toDouble(), lng.toDouble());
                         _routeOrigin = _closestStopLatLng ??
@@ -211,6 +360,11 @@ class _NearMeContentState extends State<_NearMeContent> {
                         _routeDestination = null;
                       }
                     });
+                    
+                    // Calculate accurate distance from POINT_A (nearest bus stop) to POINT_B (destination)
+                    if (hasCoords && _routeOrigin != null && _routeDestination != null) {
+                      _calculateRouteDistance(_routeOrigin!, _routeDestination!);
+                    }
                   },
                 ),
               ),

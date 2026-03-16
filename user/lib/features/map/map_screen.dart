@@ -1,12 +1,15 @@
+import 'dart:async';
 import 'package:flutter/material.dart';
-import 'package:flutter/services.dart';
 import 'package:google_maps_flutter/google_maps_flutter.dart';
 import 'package:geolocator/geolocator.dart';
 import '../../core/models/bus_stop.dart';
 import '../../core/services/bus_stops_service.dart';
-import '../../core/services/directions_service.dart';
 import '../../core/services/location_service.dart';
 import '../../core/services/map/map_service.dart';
+import 'services/bus_stop_icon_service.dart';
+import 'services/bus_stop_marker_service.dart';
+import 'services/route_service.dart';
+import 'services/map_style_service.dart';
 
 /// Main map screen: transportation-focused map with bus stops from Firestore.
 ///
@@ -55,10 +58,19 @@ class _MapScreenState extends State<MapScreen> {
   static const double _userLocationGlowRadiusMeters = 120.0;
 
   final BusStopsService _busStopsService = BusStopsService();
-  final DirectionsService _directionsService = DirectionsService();
+  final BusStopMarkerService _markerService = BusStopMarkerService();
+  final RouteService _routeService = RouteService();
+  final MapStyleService _mapStyleService = MapStyleService();
+  final BusStopIconService _iconService = BusStopIconService.instance;
 
   // Guard to prevent concurrent location requests
   bool _isLocationRequestInProgress = false;
+  
+  // Location stream subscription for real-time updates
+  StreamSubscription<Position>? _positionStreamSubscription;
+  
+  // Track if initial camera position has been set (only set once on first load)
+  bool _hasSetInitialCameraPosition = false;
   
   // Performance optimization flags
   static const bool _enableTrafficLayer = true; // Show current traffic on roads
@@ -75,6 +87,17 @@ class _MapScreenState extends State<MapScreen> {
   void initState() {
     super.initState();
     _loadMapStyle();
+    // Load custom bus stop icons asynchronously
+    _iconService.loadIcons().then((_) {
+      // Reload markers after icons are loaded
+      if (mounted) {
+        setState(() {
+          if (_busStopMarkers.isNotEmpty) {
+            _applyMarkers();
+          }
+        });
+      }
+    });
     // Show all Cebu bus stops (sample on first frame, then from Firestore)
     WidgetsBinding.instance.addPostFrameCallback((_) {
       if (mounted && _busStopMarkers.isEmpty) {
@@ -102,27 +125,39 @@ class _MapScreenState extends State<MapScreen> {
   }
 
   /// Fetches route from Directions API and draws polyline on the map.
+  /// Also calculates accurate distance from POINT_A (nearest bus stop) to POINT_B (destination).
   Future<void> _fetchAndDrawRoute(LatLng origin, LatLng destination) async {
-    final points = await _directionsService.getRoutePolyline(origin, destination);
+    // Use route service to get route information
+    final routeResult = await _routeService.getRouteWithDistance(origin, destination);
     if (!mounted) return;
-    setState(() {
-      if (points.isEmpty) {
+    
+    // Create polyline from route result
+    final polyline = _routeService.createPolylineFromRoute(routeResult);
+    
+    if (polyline == null) {
+      setState(() {
         _routePolylines = {};
-        return;
+      });
+      return;
+    }
+    
+    // Log the accurate distance from POINT_A to POINT_B
+    if (routeResult != null) {
+      print('📍 [MapScreen] Route distance from nearest bus stop (POINT_A) to destination (POINT_B):');
+      print('   Distance: ${routeResult.distanceText} (${routeResult.distanceMeters.toStringAsFixed(0)} meters)');
+      if (routeResult.durationText != null) {
+        print('   Duration: ${routeResult.durationText}');
       }
-      _routePolylines = {
-        Polyline(
-          polylineId: const PolylineId('route_origin_to_destination'),
-          points: points,
-          color: Colors.blue,
-          width: 5,
-        ),
-      };
+    }
+    
+    setState(() {
+      _routePolylines = {polyline};
     });
+    
     // Optionally fit camera to show the full route
-    if (_mapController != null && points.isNotEmpty) {
+    if (_mapController != null && routeResult != null && routeResult.polyline.isNotEmpty) {
       try {
-        final bounds = _boundsFromPoints(points);
+        final bounds = _routeService.calculateBoundsFromPoints(routeResult.polyline);
         await _mapController!.animateCamera(
           CameraUpdate.newLatLngBounds(bounds, 80),
         );
@@ -130,25 +165,10 @@ class _MapScreenState extends State<MapScreen> {
     }
   }
 
-  LatLngBounds _boundsFromPoints(List<LatLng> points) {
-    double minLat = points.first.latitude;
-    double maxLat = points.first.latitude;
-    double minLng = points.first.longitude;
-    double maxLng = points.first.longitude;
-    for (final p in points) {
-      if (p.latitude < minLat) minLat = p.latitude;
-      if (p.latitude > maxLat) maxLat = p.latitude;
-      if (p.longitude < minLng) minLng = p.longitude;
-      if (p.longitude > maxLng) maxLng = p.longitude;
-    }
-    return LatLngBounds(
-      southwest: LatLng(minLat, minLng),
-      northeast: LatLng(maxLat, maxLng),
-    );
-  }
-
   @override
   void dispose() {
+    // Cancel location stream subscription
+    _positionStreamSubscription?.cancel();
     // Dispose map controller to prevent memory leaks
     _mapController?.dispose();
     super.dispose();
@@ -276,29 +296,36 @@ class _MapScreenState extends State<MapScreen> {
         );
       }
 
-      // Center map on user location after controller is ready
-      // Don't call _centerMapOnUserLocation() here as it would request location again!
-      // Just move the camera to the position we already have
-      if (_mapController != null) {
-        print('🗺️ [MapScreen] Map controller is ready, moving camera to location...');
+      // Center map on user location ONLY if this is the first time (initial load)
+      // Don't move camera on subsequent location updates - only update marker
+      if (_mapController != null && !_hasSetInitialCameraPosition) {
+        print('🗺️ [MapScreen] Setting initial camera position (first load only)...');
         try {
           if (_useInstantCameraUpdates) {
             await _mapController!.moveCamera(
               MapService.createInstantCameraUpdate(position),
             );
-            print('   ✅ Camera moved to user location');
+            print('   ✅ Initial camera position set');
           } else {
             await _mapController!.animateCamera(
               MapService.createCameraUpdate(position),
             );
-            print('   ✅ Camera animated to user location');
+            print('   ✅ Initial camera position animated');
           }
+          _hasSetInitialCameraPosition = true;
         } catch (e) {
-          print('   ⚠️ Error moving camera: $e');
+          print('   ⚠️ Error setting initial camera position: $e');
           // Don't throw - camera move is not critical
         }
+      } else if (!_hasSetInitialCameraPosition) {
+        print('   ⚠️ Map controller is not ready yet - will set initial position when ready');
       } else {
-        print('   ⚠️ Map controller is not ready yet - will center when ready');
+        print('   ℹ️ Initial camera position already set - skipping camera movement');
+      }
+      
+      // Set up location stream listener for real-time updates (after initial position is set)
+      if (!_hasSetInitialCameraPosition || _positionStreamSubscription == null) {
+        _setupLocationStream();
       }
       
       // Show success message
@@ -434,19 +461,22 @@ class _MapScreenState extends State<MapScreen> {
         print('   ✅ Camera animation completed');
       }
 
-      // Update state first (without marker to avoid blocking)
+      // Update marker position immediately (manual re-center should update marker right away)
       if (mounted) {
         setState(() {
           _currentPosition = position;
           _hasError = false;
           _isLoading = false;
         });
+        // Update marker immediately for manual re-center
+        _applyMarkers();
+        // Reload bus stops near the new position
+        _loadBusStopsNearUser(position.latitude, position.longitude);
       }
       
-      // Add marker asynchronously after state is updated (non-blocking)
-      // Only if custom marker is enabled (built-in myLocationEnabled is preferred)
-      if (_enableCustomMarker) {
-        _addMarkerAsync(position);
+      // Set up location stream if not already set up
+      if (_positionStreamSubscription == null) {
+        _setupLocationStream();
       }
 
       // Show appropriate message based on position freshness
@@ -518,12 +548,13 @@ class _MapScreenState extends State<MapScreen> {
     if (_busStopMarkers.isNotEmpty || _currentPosition != null) {
       setState(() => _applyMarkers());
     }
-    if (_currentPosition != null) {
+    // Set initial camera position if we have a position and haven't set it yet
+    if (_currentPosition != null && !_hasSetInitialCameraPosition) {
       if (_enableCustomMarker) {
         _addMarkerAsync(_currentPosition!);
       }
       Future.microtask(() async {
-        if (_mapController != null && _currentPosition != null) {
+        if (_mapController != null && _currentPosition != null && !_hasSetInitialCameraPosition) {
           try {
             if (_useInstantCameraUpdates) {
               await _mapController!.moveCamera(
@@ -534,65 +565,84 @@ class _MapScreenState extends State<MapScreen> {
                 MapService.createCameraUpdate(_currentPosition!),
               );
             }
-            print('🗺️ [MapScreen] Camera moved to existing position');
+            _hasSetInitialCameraPosition = true;
+            print('🗺️ [MapScreen] Initial camera position set from map created callback');
           } catch (e) {
-            print('⚠️ [MapScreen] Error moving camera: $e');
+            print('⚠️ [MapScreen] Error setting initial camera position: $e');
           }
         }
       });
     }
   }
+  
+  /// Sets up a location stream listener for real-time position updates.
+  /// Updates marker position without moving the camera automatically.
+  void _setupLocationStream() async {
+    // Cancel existing subscription if any
+    await _positionStreamSubscription?.cancel();
+    
+    try {
+      // Check permissions first
+      final hasPermission = await _locationService.requestPermission();
+      final serviceEnabled = await _locationService.isLocationServiceEnabled();
+      
+      if (!hasPermission || !serviceEnabled) {
+        print('⚠️ [MapScreen] Cannot set up location stream: permission or service not available');
+        return;
+      }
+      
+      // Set up location stream with low accuracy for battery efficiency
+      _positionStreamSubscription = Geolocator.getPositionStream(
+        locationSettings: const LocationSettings(
+          accuracy: LocationAccuracy.low,
+          distanceFilter: 10, // Only update if moved at least 10 meters
+        ),
+      ).listen(
+        (Position position) {
+          // Update marker position without moving camera
+          _updateUserLocationMarker(position);
+        },
+        onError: (error) {
+          print('⚠️ [MapScreen] Location stream error: $error');
+        },
+      );
+      
+      print('✅ [MapScreen] Location stream listener set up successfully');
+    } catch (e) {
+      print('❌ [MapScreen] Error setting up location stream: $e');
+    }
+  }
+  
+  /// Updates the user location marker position without moving the camera.
+  /// This is called by the location stream listener for real-time updates.
+  void _updateUserLocationMarker(Position position) {
+    if (!mounted) return;
+    
+    print('📍 [MapScreen] Location updated: (${position.latitude}, ${position.longitude}) - updating marker only');
+    
+    setState(() {
+      _currentPosition = position;
+      _applyMarkers(); // This updates the marker position in the Set<Marker>
+    });
+    
+    // Optionally reload bus stops near the new position (but don't move camera)
+    _loadBusStopsNearUser(position.latitude, position.longitude);
+  }
 
   Future<void> _loadMapStyle() async {
-    try {
-      final json = await rootBundle.loadString(
-        'assets/map_styles/transportation_map_style.json',
-      );
+    final json = await _mapStyleService.loadTransportationStyle();
+    if (mounted && json != null) {
       _mapStyleJson = json;
-      if (mounted) {
-        setState(() {});
-        if (_mapController != null) {
-          _mapController!.setMapStyle(_mapStyleJson);
-        }
+      setState(() {});
+      if (_mapController != null) {
+        _mapController!.setMapStyle(_mapStyleJson);
       }
-    } catch (e) {
-      print('⚠️ [MapScreen] Could not load map style: $e');
     }
   }
 
-  static final BitmapDescriptor _defaultBusStopIcon =
-      BitmapDescriptor.defaultMarkerWithHue(BitmapDescriptor.hueOrange);
-  static final BitmapDescriptor _closestBusStopIcon =
-      BitmapDescriptor.defaultMarkerWithHue(BitmapDescriptor.hueGreen);
-
   /// Fallback: create markers from sample Cebu bus stops.
   void _applySampleBusStopMarkersCebu() {
-    const stops = [
-      {'id': 'CEB-001', 'name': 'Pacific Terminal', 'route': '01K', 'lat': 10.3232, 'lng': 123.9456},
-      {'id': 'CEB-002', 'name': 'Ayala Center Cebu', 'route': '02A', 'lat': 10.3192, 'lng': 123.9076},
-      {'id': 'CEB-003', 'name': 'SM City Cebu', 'route': '03D', 'lat': 10.3156, 'lng': 123.9182},
-      {'id': 'CEB-004', 'name': 'Jmall Mandaue', 'route': '01K', 'lat': 10.3289, 'lng': 123.9321},
-      {'id': 'CEB-005', 'name': 'Marpa Terminal', 'route': '13B', 'lat': 10.3312, 'lng': 123.9388},
-      {'id': 'CEB-006', 'name': 'Cebu South Bus Terminal', 'route': '04B', 'lat': 10.2986, 'lng': 123.8994},
-      {'id': 'CEB-007', 'name': 'Colon Street', 'route': '12C', 'lat': 10.2945, 'lng': 123.9012},
-      {'id': 'CEB-008', 'name': 'IT Park', 'route': '02A', 'lat': 10.3234, 'lng': 123.9089},
-      {'id': 'CEB-009', 'name': 'Park Mall', 'route': '01K', 'lat': 10.3345, 'lng': 123.9123},
-      {'id': 'CEB-010', 'name': 'Gaisano Capital', 'route': '13B', 'lat': 10.3178, 'lng': 123.8912},
-    ];
-    final Set<Marker> markers = {};
-    for (final s in stops) {
-      final id = s['id'] as String;
-      final name = s['name'] as String;
-      final route = s['route'] as String;
-      final lat = (s['lat'] as num).toDouble();
-      final lng = (s['lng'] as num).toDouble();
-      markers.add(Marker(
-        markerId: MarkerId('bus_stop_$id'),
-        position: LatLng(lat, lng),
-        icon: _defaultBusStopIcon,
-        infoWindow: InfoWindow(title: name, snippet: 'Stop $id · Route $route'),
-      ));
-    }
+    final markers = _markerService.createSampleMarkers();
     setState(() {
       _busStopMarkers = markers;
       _applyMarkers();
@@ -629,19 +679,7 @@ class _MapScreenState extends State<MapScreen> {
 
   /// Build bus stop markers; uses green icon for the stop with [closestStopId].
   void _applyBusStopMarkers(List<BusStop> stops, {String? closestStopId}) {
-    final Set<Marker> markers = {};
-    for (final stop in stops) {
-      final isClosest = closestStopId != null && stop.id == closestStopId;
-      markers.add(Marker(
-        markerId: MarkerId('bus_stop_${stop.id}'),
-        position: stop.position,
-        icon: isClosest ? _closestBusStopIcon : _defaultBusStopIcon,
-        infoWindow: InfoWindow(
-          title: isClosest ? '${stop.name} (closest)' : stop.name,
-          snippet: stop.route.isEmpty ? stop.name : 'Stop ${stop.stopCode} · Route ${stop.route}',
-        ),
-      ));
-    }
+    final markers = _markerService.createMarkersFromStops(stops, closestStopId: closestStopId);
     setState(() {
       _busStopMarkers = markers;
       _applyMarkers();

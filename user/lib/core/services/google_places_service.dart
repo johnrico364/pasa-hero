@@ -1,4 +1,5 @@
 import 'dart:convert';
+import 'dart:math' as math;
 
 import 'package:flutter/services.dart';
 import 'package:http/http.dart' as http;
@@ -25,34 +26,107 @@ class GooglePlacesService {
 
   /// Gets the single closest bus/transit stop to [lat], [lng] using rankby=distance (no radius).
   /// Returns null if key missing or no results.
+  /// Uses Haversine formula to verify and select the truly nearest stop from results.
   Future<BusStop?> getClosestBusStop(double lat, double lng) async {
     final key = await _getApiKey();
     if (key.isEmpty) return null;
     try {
-      final uri = Uri.parse('$_baseUrl/nearbysearch/json').replace(
-        queryParameters: {
-          'location': '$lat,$lng',
-          'rankby': 'distance',
-          'type': 'bus_station',
-          'key': key,
-        },
-      );
-      final response = await http.get(uri).timeout(const Duration(seconds: 10));
-      final data = jsonDecode(response.body) as Map<String, dynamic>;
-      final status = data['status'] as String?;
-      final errorMsg = data['error_message'] as String?;
-      if (status != 'OK' && status != 'ZERO_RESULTS') {
-        print('📍 [Places] Closest stop status: $status ${errorMsg != null ? "– $errorMsg" : ""}');
+      // Try multiple place types to get more comprehensive results
+      final List<BusStop> allStops = [];
+      
+      // 1. Try bus_station type
+      try {
+        final uri1 = Uri.parse('$_baseUrl/nearbysearch/json').replace(
+          queryParameters: {
+            'location': '$lat,$lng',
+            'rankby': 'distance',
+            'type': 'bus_station',
+            'key': key,
+          },
+        );
+        final response1 = await http.get(uri1).timeout(const Duration(seconds: 10));
+        final data1 = jsonDecode(response1.body) as Map<String, dynamic>;
+        if (data1['status'] == 'OK') {
+          final results1 = data1['results'] as List<dynamic>? ?? [];
+          allStops.addAll(_parseResults(results1));
+        }
+      } catch (e) {
+        print('⚠️ [Places] bus_station search error: $e');
+      }
+      
+      // 2. Try transit_station type (broader, includes bus stops)
+      try {
+        final uri2 = Uri.parse('$_baseUrl/nearbysearch/json').replace(
+          queryParameters: {
+            'location': '$lat,$lng',
+            'rankby': 'distance',
+            'type': 'transit_station',
+            'key': key,
+          },
+        );
+        final response2 = await http.get(uri2).timeout(const Duration(seconds: 10));
+        final data2 = jsonDecode(response2.body) as Map<String, dynamic>;
+        if (data2['status'] == 'OK') {
+          final results2 = data2['results'] as List<dynamic>? ?? [];
+          final stops2 = _parseResults(results2);
+          // Add only if not already in allStops (dedupe by place_id)
+          final existingIds = allStops.map((s) => s.id).toSet();
+          for (final stop in stops2) {
+            if (!existingIds.contains(stop.id)) {
+              allStops.add(stop);
+            }
+          }
+        }
+      } catch (e) {
+        print('⚠️ [Places] transit_station search error: $e');
+      }
+      
+      if (allStops.isEmpty) {
+        print('📍 [Places] No stops found');
         return null;
       }
-      final results = data['results'] as List<dynamic>? ?? [];
-      if (results.isEmpty) return null;
-      final first = _parseResults(results.take(1).toList());
-      return first.isEmpty ? null : first.first;
+      
+      // Calculate actual distance to each stop using Haversine formula
+      // and select the truly nearest one
+      BusStop? nearestStop;
+      double nearestDistance = double.infinity;
+      
+      for (final stop in allStops) {
+        final distance = _haversineDistance(lat, lng, stop.lat, stop.lng);
+        if (distance < nearestDistance) {
+          nearestDistance = distance;
+          nearestStop = stop;
+        }
+      }
+      
+      if (nearestStop != null) {
+        print('✅ [Places] Found nearest stop: ${nearestStop.name} (${nearestDistance.toStringAsFixed(2)} km away)');
+      }
+      
+      return nearestStop;
     } catch (e) {
       print('⚠️ [Places] getClosestBusStop: $e');
       return null;
     }
+  }
+
+  /// Calculate distance using Haversine formula (accurate for Earth's curvature).
+  /// Returns distance in kilometers.
+  double _haversineDistance(double lat1, double lng1, double lat2, double lng2) {
+    const double earthRadiusKm = 6371.0;
+    
+    final double dLat = (lat2 - lat1) * math.pi / 180.0;
+    final double dLng = (lng2 - lng1) * math.pi / 180.0;
+    
+    final double a = math.sin(dLat / 2) * math.sin(dLat / 2) +
+        math.cos(lat1 * math.pi / 180.0) *
+        math.cos(lat2 * math.pi / 180.0) *
+        math.sin(dLng / 2) * math.sin(dLng / 2);
+    
+    final double c = 2 * math.atan2(math.sqrt(a), math.sqrt(1 - a));
+    final double distance = earthRadiusKm * c;
+    
+    return distance;
   }
 
   /// Gets up to 60 bus/transit stops within [radiusMeters] of [lat], [lng] (3 pages of 20).
@@ -107,6 +181,7 @@ class GooglePlacesService {
   }
 
   /// Workflow: closest stop to user + up to 60 stops in city radius. [closestStopId] is set to the id of the nearest stop.
+  /// Verifies the closest stop using Haversine formula to ensure accuracy.
   Future<({List<BusStop> stops, String? closestStopId})> getStopsWithClosest(
     double userLat,
     double userLng, {
@@ -131,9 +206,23 @@ class GooglePlacesService {
       for (final s in inCity) {
         if (s.id != closest?.id) combined.add(s);
       }
+      
+      // Verify and find the truly nearest stop from all combined stops using Haversine
+      BusStop? verifiedClosest;
+      double minDistance = double.infinity;
+      
+      for (final stop in combined) {
+        final distance = _haversineDistance(userLat, userLng, stop.lat, stop.lng);
+        if (distance < minDistance) {
+          minDistance = distance;
+          verifiedClosest = stop;
+        }
+      }
+      
       if (combined.isNotEmpty) {
-        print('📍 [Places] ${combined.length} stops; closest: ${closest?.name}');
-        return (stops: combined, closestStopId: closest?.id);
+        final closestName = verifiedClosest?.name ?? closest?.name ?? 'Unknown';
+        print('📍 [Places] ${combined.length} stops; verified closest: $closestName (${minDistance.toStringAsFixed(2)} km)');
+        return (stops: combined, closestStopId: verifiedClosest?.id);
       }
       return (stops: <BusStop>[], closestStopId: null);
     } catch (e) {

@@ -10,6 +10,14 @@ const String kBackendBaseUrl = String.fromEnvironment(
   defaultValue: 'http://localhost:3000',
 );
 
+/// Google API key for Directions API (route distance).
+/// Set via: flutter run --dart-define=GOOGLE_API_KEY=your_key
+/// Or it will be retrieved from platform (AndroidManifest/iOS Info.plist)
+const String kGoogleApiKey = String.fromEnvironment(
+  'GOOGLE_API_KEY',
+  defaultValue: '',
+);
+
 /// Returns the backend base URL, with emulator fix on Android when default is localhost.
 String getBackendBaseUrl() {
   String base = kBackendBaseUrl;

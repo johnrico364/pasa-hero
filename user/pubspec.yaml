@@ -76,6 +76,7 @@ flutter:
     - assets/images/splashscreen/spalshscreen.png
     - assets/images/logo/Bus.png
     - assets/images/logo/buspic.png
+    - assets/images/logo/bustopSign.png
     - assets/map_styles/transportation_map_style.json
     
 

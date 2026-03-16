@@ -124,4 +124,26 @@ class LocationCacheService {
     }
     return null;
   }
+
+  /// Gets cached location with custom duration check.
+  /// 
+  /// Parameters:
+  /// - [maxAge]: Maximum age of cached location to consider valid
+  /// 
+  /// Returns cached location if it exists and is less than [maxAge] old, null otherwise.
+  Position? getCachedLocationWithMaxAge(Duration maxAge) {
+    if (_cachedPosition == null || _cacheTimestamp == null) {
+      return null;
+    }
+
+    final age = DateTime.now().difference(_cacheTimestamp!);
+    
+    if (age < maxAge) {
+      print('📦 [LocationCache] Using cached location (${age.inMinutes} min old, max: ${maxAge.inMinutes} min)');
+      return _cachedPosition;
+    } else {
+      print('📦 [LocationCache] Cached location expired (${age.inMinutes} min old, max: ${maxAge.inMinutes} min)');
+      return null;
+    }
+  }
 }

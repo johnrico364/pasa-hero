@@ -4,6 +4,8 @@ import 'package:geolocator/geolocator.dart';
 import 'package:google_maps_flutter/google_maps_flutter.dart';
 import '../../core/services/location_service.dart';
 import '../../core/services/map/map_service.dart';
+import '../../core/services/directions_service.dart';
+import '../profile/screen/profile_screen_data.dart';
 
 class MapScreen extends StatefulWidget {
   const MapScreen({super.key});
@@ -16,11 +18,13 @@ class MapScreen extends StatefulWidget {
 
 class _MapScreenState extends State<MapScreen> {
   final LocationService _locationService = LocationService();
+  final DirectionsService _directionsService = DirectionsService();
   GoogleMapController? _mapController;
   bool _isLoading = true;
   Position? _currentPosition;
   CameraPosition? _initialCameraPosition;
   Set<Marker> _markers = {};
+  Set<Polyline> _routePolylines = {};
   bool _isLocationRequestInProgress = false;
 
   @override
@@ -28,8 +32,129 @@ class _MapScreenState extends State<MapScreen> {
     super.initState();
     // Set initial camera position immediately so map shows right away
     _initialCameraPosition = MapService.getDefaultCameraPosition();
-    // Then try to get location in background
+    // Load operator route code and then initialize location
+    _loadOperatorRoute();
+  }
+
+  /// Loads the operator's route code from Firestore and highlights the route if set.
+  Future<void> _loadOperatorRoute() async {
+    try {
+      final routeCode = await ProfileDataService.getOperatorRouteCode();
+      if (mounted && routeCode != null) {
+        await _highlightRoute(routeCode);
+      }
+    } catch (e) {
+      print('⚠️ [MapScreen] Error loading route code: $e');
+    }
+    // Initialize location after loading route
     _initializeLocation();
+  }
+
+  /// Highlights the route on the map based on the route code.
+  Future<void> _highlightRoute(String routeCode) async {
+    final coordinates = AvailableRoutes.getRouteCoordinates(routeCode);
+    if (coordinates == null) {
+      print('⚠️ [MapScreen] No coordinates found for route code: $routeCode');
+      return;
+    }
+
+    try {
+      // Get route polyline from Google Directions API
+      final routeResult = await _directionsService.getRouteWithDistance(
+        coordinates.startPoint,
+        coordinates.endPoint,
+      );
+
+      if (routeResult == null || routeResult.polyline.isEmpty) {
+        print('⚠️ [MapScreen] Could not get route polyline for code: $routeCode');
+        return;
+      }
+
+      // Get route info for display
+      final routeInfo = AvailableRoutes.getRouteByCode(routeCode);
+
+      if (mounted) {
+        setState(() {
+          // Add route polyline
+          _routePolylines = {
+            Polyline(
+              polylineId: PolylineId('operator_route_$routeCode'),
+              points: routeResult.polyline,
+              color: Colors.blue,
+              width: 5,
+              patterns: [PatternItem.dash(20), PatternItem.gap(10)],
+            ),
+          };
+
+          // Add start and end markers
+          _markers = {
+            // Start point marker
+            Marker(
+              markerId: const MarkerId('route_start'),
+              position: coordinates.startPoint,
+              icon: BitmapDescriptor.defaultMarkerWithHue(BitmapDescriptor.hueGreen),
+              infoWindow: InfoWindow(
+                title: routeInfo?.name ?? 'Route Start',
+                snippet: 'Start: ${routeInfo?.name ?? routeCode}',
+              ),
+            ),
+            // End point marker
+            Marker(
+              markerId: const MarkerId('route_end'),
+              position: coordinates.endPoint,
+              icon: BitmapDescriptor.defaultMarkerWithHue(BitmapDescriptor.hueRed),
+              infoWindow: InfoWindow(
+                title: 'Route End',
+                snippet: 'End: ${routeInfo?.name ?? routeCode}',
+              ),
+            ),
+          };
+        });
+
+        // Fit camera to show the entire route
+        if (_mapController != null && routeResult.polyline.isNotEmpty) {
+          try {
+            final bounds = _calculateBounds(routeResult.polyline);
+            await _mapController!.animateCamera(
+              CameraUpdate.newLatLngBounds(bounds, 100),
+            );
+          } catch (e) {
+            print('⚠️ [MapScreen] Error fitting camera to route: $e');
+          }
+        }
+
+        print('✅ [MapScreen] Route highlighted: ${routeInfo?.name ?? routeCode}');
+      }
+    } catch (e) {
+      print('❌ [MapScreen] Error highlighting route: $e');
+    }
+  }
+
+  /// Calculates bounds from a list of points.
+  LatLngBounds _calculateBounds(List<LatLng> points) {
+    if (points.isEmpty) {
+      return LatLngBounds(
+        southwest: const LatLng(10.25, 123.75),
+        northeast: const LatLng(10.45, 124.05),
+      );
+    }
+
+    double minLat = points.first.latitude;
+    double maxLat = points.first.latitude;
+    double minLng = points.first.longitude;
+    double maxLng = points.first.longitude;
+
+    for (final p in points) {
+      if (p.latitude < minLat) minLat = p.latitude;
+      if (p.latitude > maxLat) maxLat = p.latitude;
+      if (p.longitude < minLng) minLng = p.longitude;
+      if (p.longitude > maxLng) maxLng = p.longitude;
+    }
+
+    return LatLngBounds(
+      southwest: LatLng(minLat, minLng),
+      northeast: LatLng(maxLat, maxLng),
+    );
   }
 
   @override
@@ -132,7 +257,7 @@ class _MapScreenState extends State<MapScreen> {
         });
       }
       
-      // Add marker for operator location
+      // Add marker for operator location (but preserve route markers if they exist)
       _addOperatorMarker(position);
       
       // Show appropriate message based on position freshness
@@ -249,20 +374,76 @@ class _MapScreenState extends State<MapScreen> {
   }
 
   /// Adds a marker for the operator's location.
+  /// Preserves existing route markers if they exist.
   void _addOperatorMarker(Position position) {
     setState(() {
-      _markers = {
-        Marker(
-          markerId: const MarkerId('operator_location'),
-          position: LatLng(position.latitude, position.longitude),
-          infoWindow: const InfoWindow(
-            title: 'Your Location',
-            snippet: 'Operator current location',
-          ),
-          icon: BitmapDescriptor.defaultMarkerWithHue(BitmapDescriptor.hueBlue),
+      // Keep existing markers (route start/end) and add operator location
+      final operatorMarker = Marker(
+        markerId: const MarkerId('operator_location'),
+        position: LatLng(position.latitude, position.longitude),
+        infoWindow: const InfoWindow(
+          title: 'Your Location',
+          snippet: 'Operator current location',
         ),
-      };
+        icon: BitmapDescriptor.defaultMarkerWithHue(BitmapDescriptor.hueBlue),
+      );
+      
+      // Remove old operator marker if it exists, then add new one
+      _markers.removeWhere((m) => m.markerId.value == 'operator_location');
+      _markers.add(operatorMarker);
     });
+  }
+
+  /// Gets accurate street distance between two points using Google Maps API.
+  /// This replaces inaccurate equation-based calculations with real street routing.
+  /// 
+  /// Returns the distance in meters, or null if the route cannot be calculated.
+  /// 
+  /// Example usage:
+  /// ```dart
+  /// final distance = await _getAccurateStreetDistance(
+  ///   LatLng(10.3157, 123.8854), // Origin
+  ///   LatLng(10.3200, 123.8900), // Destination
+  /// );
+  /// if (distance != null) {
+  ///   print('Distance: ${distance / 1000} km');
+  /// }
+  /// ```
+  Future<double?> getAccurateStreetDistance(
+    LatLng origin,
+    LatLng destination,
+  ) async {
+    try {
+      final result = await _directionsService.getRouteWithDistance(origin, destination);
+      if (result != null) {
+        print('✅ [MapScreen] Accurate street distance: ${result.distanceMeters}m (${result.distanceText})');
+        return result.distanceMeters;
+      } else {
+        print('⚠️ [MapScreen] Could not calculate route distance');
+        return null;
+      }
+    } catch (e) {
+      print('❌ [MapScreen] Error getting accurate distance: $e');
+      return null;
+    }
+  }
+
+  /// Gets accurate street distance with full route information.
+  /// Returns a RouteResult with distance, duration, and polyline points.
+  Future<RouteResult?> getRouteWithDistance(
+    LatLng origin,
+    LatLng destination,
+  ) async {
+    try {
+      final result = await _directionsService.getRouteWithDistance(origin, destination);
+      if (result != null) {
+        print('✅ [MapScreen] Route calculated: ${result.distanceText}, ${result.durationText ?? "N/A"}');
+      }
+      return result;
+    } catch (e) {
+      print('❌ [MapScreen] Error getting route: $e');
+      return null;
+    }
   }
 
   @override
@@ -298,6 +479,7 @@ class _MapScreenState extends State<MapScreen> {
             compassEnabled: true,
             myLocationEnabled: false,
             markers: _markers,
+            polylines: _routePolylines,
           ),
           if (_isLoading)
             const Center(

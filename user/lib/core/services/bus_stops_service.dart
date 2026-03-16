@@ -40,15 +40,75 @@ class BusStopsService {
   static const double _cebuCenterLng = 123.8854;
 
   /// Load bus stops using user location: closest stop (rankby=distance) + up to 60 in radius; highlights closest.
+  /// Falls back to Firestore stops with Haversine distance calculation if Places API fails.
   Future<CebuStopsResult> getBusStopsWithClosestHighlighted(double userLat, double userLng) async {
     final result = await _placesService.getStopsWithClosest(userLat, userLng, cityRadiusMeters: 50000);
-    if (result.stops.isNotEmpty) {
+    if (result.stops.isNotEmpty && result.closestStopId != null) {
+      // Verify the closest stop is actually the nearest using Haversine
+      BusStop? verifiedClosest;
+      double minDistance = double.infinity;
+      
+      for (final stop in result.stops) {
+        final distance = _approxDistanceKm(userLat, userLng, stop.lat, stop.lng);
+        if (distance < minDistance) {
+          minDistance = distance;
+          verifiedClosest = stop;
+        }
+      }
+      
+      // If the verified closest is different from what Places API said, use the verified one
+      final finalClosestId = verifiedClosest?.id ?? result.closestStopId;
+      
+      if (verifiedClosest != null && verifiedClosest.id != result.closestStopId) {
+        print('⚠️ [BusStops] Places API closest (${result.closestStopId}) differs from verified closest (${verifiedClosest.id})');
+        print('   Using verified closest: ${verifiedClosest.name} (${minDistance.toStringAsFixed(2)} km)');
+      }
+      
       return CebuStopsResult(
         stops: result.stops,
         isRealData: true,
-        closestStopId: result.closestStopId,
+        closestStopId: finalClosestId,
       );
     }
+    
+    // Fallback: Try Firestore stops and find nearest using Haversine
+    print('📍 [BusStops] Places API returned no stops, trying Firestore fallback...');
+    try {
+      final snapshot = await _firestore
+          .collection(busStopsCollection)
+          .get()
+          .timeout(const Duration(seconds: 5));
+      final all = snapshot.docs
+          .map((doc) => BusStop.fromFirestore(doc.id, doc.data()))
+          .where((stop) => stop.lat != 0.0 && stop.lng != 0.0)
+          .toList();
+      
+      if (all.isNotEmpty) {
+        // Find nearest using Haversine formula
+        BusStop? nearest;
+        double minDist = double.infinity;
+        
+        for (final stop in all) {
+          final dist = _approxDistanceKm(userLat, userLng, stop.lat, stop.lng);
+          if (dist < minDist) {
+            minDist = dist;
+            nearest = stop;
+          }
+        }
+        
+        if (nearest != null) {
+          print('✅ [BusStops] Found nearest from Firestore: ${nearest.name} (${minDist.toStringAsFixed(2)} km)');
+          return CebuStopsResult(
+            stops: all,
+            isRealData: true,
+            closestStopId: nearest.id,
+          );
+        }
+      }
+    } catch (e) {
+      print('⚠️ [BusStops] Firestore fallback failed: $e');
+    }
+    
     return getBusStopsInCebu();
   }
 
@@ -127,10 +187,24 @@ class BusStopsService {
     return near;
   }
 
+  /// Calculate distance between two points using Haversine formula (accurate for Earth's curvature).
+  /// Returns distance in kilometers.
   double _approxDistanceKm(double lat1, double lng1, double lat2, double lng2) {
-    final dLat = (lat2 - lat1) * _kmPerDegree;
-    final dLng = (lng2 - lng1) * _kmPerDegree * math.cos(lat1 * math.pi / 180);
-    return math.sqrt(dLat * dLat + dLng * dLng);
+    // Haversine formula for calculating great-circle distance between two points
+    const double earthRadiusKm = 6371.0; // Earth's radius in kilometers
+    
+    final double dLat = (lat2 - lat1) * math.pi / 180.0;
+    final double dLng = (lng2 - lng1) * math.pi / 180.0;
+    
+    final double a = math.sin(dLat / 2) * math.sin(dLat / 2) +
+        math.cos(lat1 * math.pi / 180.0) *
+        math.cos(lat2 * math.pi / 180.0) *
+        math.sin(dLng / 2) * math.sin(dLng / 2);
+    
+    final double c = 2 * math.atan2(math.sqrt(a), math.sqrt(1 - a));
+    final double distance = earthRadiusKm * c;
+    
+    return distance;
   }
 
   /// Sample bus stops around [lat], [lng] (~0.5–1.5 km away) for fallback.
