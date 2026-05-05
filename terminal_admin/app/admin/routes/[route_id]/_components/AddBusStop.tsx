@@ -164,7 +164,7 @@ export default function AddBusStop({ routeId, activeStops, onAddStop, onToast }:
                       mapContainerStyle={{ width: "100%", height: "100%" }}
                       options={{
                         mapId: "DEMO_MAP_ID",
-                        mapTypeId: "hybrid",
+                        mapTypeId: "roadmap",
                         streetViewControl: false,
                         mapTypeControl: false,
                         fullscreenControl: false,
