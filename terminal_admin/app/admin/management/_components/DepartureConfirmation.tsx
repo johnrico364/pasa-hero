@@ -106,7 +106,7 @@ export default function DepartureConfirmation({
   };
 
   return (
-    <div className="rounded-xl border border-base-300 bg-base-100 p-4 shadow-sm">
+    <div className="rounded-xl border-2 border-[#0062CA]/40 bg-base-100 p-4 shadow-sm ring-1 ring-[#0062CA]/20">
       <div className="mb-3 flex items-center justify-between">
         <h2 className="text-lg font-semibold">Pending departure confirmations</h2>
         <span className="badge bg-[#0062CA] text-white">{pendingDepartures.length}</span>
@@ -116,9 +116,9 @@ export default function DepartureConfirmation({
           {lastError}
         </div>
       ) : null}
-      <div className="overflow-x-auto min-h-40 max-h-80">
+      <div className="overflow-x-auto min-h-40 max-h-80 rounded-lg border border-[#0062CA]/20">
         <table className="table table-zebra w-full">
-          <thead>
+          <thead className="bg-[#0062CA]/10">
             <tr>
               <th>Bus</th>
               <th>Route</th>
