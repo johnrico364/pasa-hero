@@ -12,7 +12,7 @@ function StatusBadge({ status }: { status: string }) {
     completed: "badge-success",
     cancelled: "badge-error",
     arrival: "badge-info",
-    departure: "badge-info",
+    departure: "badge-success",
     confirmed: "badge-success",
     rejected: "badge-error",
   };

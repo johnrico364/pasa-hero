@@ -3,7 +3,7 @@
 import Image from "next/image";
 import { useState } from "react";
 import { LuEye, LuEyeOff } from "react-icons/lu";
-import logoName from "@/public/LogoName.jpg";
+import logoName from "@/public/PasaHero-name.png";
 import { useLogin } from "@/app/login/_hooks/useLogin";
 import useAuthToken from "@/app/_public_hooks/useAuthToken";
 
