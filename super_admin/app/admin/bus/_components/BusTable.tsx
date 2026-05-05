@@ -17,18 +17,6 @@ function BusStatusBadge({ status }: { status: string }) {
   );
 }
 
-function OccupancyBadge({ status }: { status: string }) {
-  const map: Record<string, string> = {
-    empty: "badge-ghost",
-    "few seats": "badge-info",
-    "standing room": "badge-warning",
-    full: "badge-error",
-  };
-  return (
-    <span className={`badge badge-sm ${map[status] ?? "badge-ghost"}`}>{status}</span>
-  );
-}
-
 function pickPrimaryAssignment(
   assignments: BusAssignmentRow[] | undefined,
 ): BusAssignmentRow | null {
@@ -109,8 +97,6 @@ export default function BusTable({
             <th>Plate #</th>
             <th>Capacity</th>
             <th>Bus status</th>
-            <th>Current status</th>
-            <th>Occupancy</th>
             <th>Driver</th>
             <th>Route</th>
             <th>Actions</th>
@@ -137,12 +123,6 @@ export default function BusTable({
               <td>{bus.capacity}</td>
               <td>
                 <BusStatusBadge status={bus.bus_status} />
-              </td>
-              <td>
-                <OccupancyBadge status={bus.occupancy_status} />
-              </td>
-              <td>
-                {bus.occupancy_count} / {bus.capacity}
               </td>
               <td>{driverDisplay}</td>
               <td>
