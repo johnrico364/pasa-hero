@@ -7,7 +7,6 @@ import {
   FaArrowLeft,
   FaBus,
   FaIdCard,
-  FaGaugeHigh,
   FaUser,
   FaRoute,
   FaTrash,
@@ -22,18 +21,6 @@ function BusStatusBadge({ status }: { status: string }) {
     active: "badge-success",
     maintenance: "badge-warning",
     "out of service": "badge-error",
-  };
-  return (
-    <span className={`badge badge-lg ${map[status] ?? "badge-ghost"}`}>{status}</span>
-  );
-}
-
-function OccupancyBadge({ status }: { status: string }) {
-  const map: Record<string, string> = {
-    empty: "badge-ghost",
-    "few seats": "badge-info",
-    "standing room": "badge-warning",
-    full: "badge-error",
   };
   return (
     <span className={`badge badge-lg ${map[status] ?? "badge-ghost"}`}>{status}</span>
@@ -198,9 +185,6 @@ export default function BusDetailsClient({ busId }: BusDetailsClientProps) {
     );
   }
 
-  const occupancyPercent =
-    bus.capacity > 0 ? Math.round((bus.occupancy_count / bus.capacity) * 100) : 0;
-
   return (
     <div className="space-y-8 pt-6">
       <div className="relative overflow-hidden rounded-2xl bg-linear-to-br from-[#0062CA]/15 via-base-100 to-base-100 border border-base-content/5 p-6 shadow-lg">
@@ -230,7 +214,6 @@ export default function BusDetailsClient({ busId }: BusDetailsClientProps) {
           </div>
           <div className="flex items-center gap-2">
             <BusStatusBadge status={bus.bus_status} />
-            <OccupancyBadge status={bus.occupancy_status} />
             <button
               type="button"
               onClick={() => setShowDeleteModal(true)}
@@ -290,7 +273,7 @@ export default function BusDetailsClient({ busId }: BusDetailsClientProps) {
         </form>
       </dialog>
 
-      <div className="grid gap-6 md:grid-cols-2">
+      <div className="space-y-6">
         <div className="group rounded-2xl border border-base-content/5 bg-base-100 p-5 shadow-md shadow-base-content/5 transition-shadow hover:shadow-lg">
           <div className="mb-4 flex items-center gap-3 border-b border-base-content/10 pb-4">
             <div className="flex h-10 w-10 items-center justify-center rounded-xl bg-primary/10 text-primary">
@@ -298,47 +281,36 @@ export default function BusDetailsClient({ busId }: BusDetailsClientProps) {
             </div>
             <h2 className="text-xl font-semibold">Identification</h2>
           </div>
-          <div className="space-y-0">
-            <InfoRow label="Bus number" value={bus.bus_number} />
-            <InfoRow label="Plate number">
-              <span className="rounded-lg bg-base-200 px-3 py-1.5 font-mono text-base font-semibold tracking-wider">
-                {bus.plate_number}
-              </span>
-            </InfoRow>
-            <InfoRow label="Maximum capacity" value={`${bus.capacity} seats`} />
+          <div className="grid gap-4 sm:grid-cols-3">
+            <div className="rounded-xl bg-base-200/50 p-4">
+              <p className="text-sm font-medium uppercase tracking-wide text-base-content/60">
+                Bus number
+              </p>
+              <p className="mt-2 text-2xl font-bold">{bus.bus_number}</p>
+            </div>
+            <div className="rounded-xl bg-base-200/50 p-4">
+              <p className="text-sm font-medium uppercase tracking-wide text-base-content/60">
+                Plate number
+              </p>
+              <p className="mt-2">
+                <span className="inline-block rounded-lg bg-base-200 px-3 py-1.5 font-mono text-lg font-semibold tracking-wider">
+                  {bus.plate_number}
+                </span>
+              </p>
+            </div>
+            <div className="rounded-xl bg-base-200/50 p-4">
+              <p className="text-sm font-medium uppercase tracking-wide text-base-content/60">
+                Maximum capacity
+              </p>
+              <p className="mt-2 text-2xl font-bold">
+                {bus.capacity}
+                <span className="ml-1 text-base font-medium text-base-content/60">seats</span>
+              </p>
+            </div>
           </div>
         </div>
 
         <div className="group rounded-2xl border border-base-content/5 bg-base-100 p-5 shadow-md shadow-base-content/5 transition-shadow hover:shadow-lg">
-          <div className="mb-4 flex items-center gap-3 border-b border-base-content/10 pb-4">
-            <div className="flex h-10 w-10 items-center justify-center rounded-xl bg-secondary/15 text-secondary">
-              <FaGaugeHigh className="h-5 w-5" />
-            </div>
-            <h2 className="text-xl font-semibold">Status</h2>
-          </div>
-          <div className="space-y-0">
-            <InfoRow label="Bus status">
-              <BusStatusBadge status={bus.bus_status} />
-            </InfoRow>
-            <InfoRow label="Occupancy status">
-              <OccupancyBadge status={bus.occupancy_status} />
-            </InfoRow>
-            <InfoRow label="Occupancy" value={`${bus.occupancy_count} / ${bus.capacity} passengers`} />
-            <div className="pt-3">
-              <div className="flex justify-between text-base-content/70 mb-1">
-                <span>Seats filled</span>
-                <span className="font-medium">{occupancyPercent}%</span>
-              </div>
-              <progress
-                className="progress progress-primary h-4 w-full"
-                value={occupancyPercent}
-                max={100}
-              />
-            </div>
-          </div>
-        </div>
-
-        <div className="group rounded-2xl border border-base-content/5 bg-base-100 p-5 shadow-md shadow-base-content/5 transition-shadow hover:shadow-lg md:col-span-2">
           <div className="mb-4 flex items-center gap-3 border-b border-base-content/10 pb-4">
             <div className="flex h-10 w-10 items-center justify-center rounded-xl bg-accent/20 text-accent">
               <FaUser className="h-5 w-5" />
