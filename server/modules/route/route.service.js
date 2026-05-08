@@ -384,6 +384,26 @@ export const RouteService = {
       throw error;
     }
 
+    const syncStatusToSibling = Object.prototype.hasOwnProperty.call(
+      normalizedUpdateData,
+      "status",
+    );
+    const syncRouteCodeToSibling = Object.prototype.hasOwnProperty.call(
+      normalizedUpdateData,
+      "route_code",
+    );
+    let siblingId = null;
+    if (syncStatusToSibling || syncRouteCodeToSibling) {
+      const siblingType = route.route_type === "normal" ? "vice_versa" : "normal";
+      const sibling = await Route.findOne({
+        route_code: route.route_code,
+        route_type: siblingType,
+        _id: { $ne: id },
+        ...ACTIVE_ROUTE_FILTER,
+      }).select("_id");
+      siblingId = sibling ? sibling._id : null;
+    }
+
     const updated = await Route.findOneAndUpdate(
       { _id: id, ...ACTIVE_ROUTE_FILTER },
       normalizedUpdateData,
@@ -394,6 +414,21 @@ export const RouteService = {
     )
       .populate("start_terminal_id")
       .populate("end_terminal_id");
+
+    if (
+      updated &&
+      siblingId &&
+      (syncStatusToSibling || syncRouteCodeToSibling)
+    ) {
+      const siblingPatch = {};
+      if (syncStatusToSibling) siblingPatch.status = updated.status;
+      if (syncRouteCodeToSibling) siblingPatch.route_code = updated.route_code;
+      await Route.findOneAndUpdate(
+        { _id: siblingId, ...ACTIVE_ROUTE_FILTER },
+        siblingPatch,
+        { new: true, runValidators: true },
+      );
+    }
 
     if (
       updated &&
