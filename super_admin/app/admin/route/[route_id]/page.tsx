@@ -1,10 +1,19 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import Link from "next/link";
 import { useParams } from "next/navigation";
+import { GoogleMap, useJsApiLoader } from "@react-google-maps/api";
 import { RouteProps, type RouteStatus } from "../RouteProps";
 import { useGetRouteDetails } from "../_hooks/useGetRouteDetails";
+import {
+  googleMapsApiKey,
+  isGoogleMapsConfigured,
+} from "@/lib/firebaseClient";
+import {
+  GOOGLE_MAPS_LIBRARIES,
+  GOOGLE_MAPS_SCRIPT_ID,
+} from "@/lib/googleMaps";
 
 type ApiTerminalRef = {
   _id?: string;
@@ -96,6 +105,162 @@ function formatDateTime(iso: string | undefined) {
   });
 }
 
+/** Same mapId as terminal / edit route — required for AdvancedMarkerElement. */
+const ROUTE_STOPS_MAP_ID = "DEMO_MAP_ID";
+const ROUTE_STOPS_MAP_HEIGHT_PX = 440;
+const ROUTE_STOPS_MAP_DEFAULT_CENTER = { lat: 10.3313, lng: 123.9362 };
+
+function RouteStopsMap({ stops }: { stops: ApiRouteStop[] }) {
+  const [mapInstance, setMapInstance] = useState<google.maps.Map | null>(null);
+  const markersRef = useRef<google.maps.marker.AdvancedMarkerElement[]>([]);
+  const polylineRef = useRef<google.maps.Polyline | null>(null);
+
+  const syncMarkersAndBounds = useCallback(() => {
+    if (!mapInstance || !window.google?.maps?.marker?.AdvancedMarkerElement) {
+      return;
+    }
+
+    for (const marker of markersRef.current) {
+      marker.map = null;
+    }
+    markersRef.current = [];
+
+    if (polylineRef.current) {
+      polylineRef.current.setMap(null);
+      polylineRef.current = null;
+    }
+
+    const validStops = stops.filter(
+      (s) =>
+        Number.isFinite(Number(s.latitude)) && Number.isFinite(Number(s.longitude)),
+    );
+    if (validStops.length === 0) {
+      return;
+    }
+
+    const path = validStops.map((s) => ({
+      lat: Number(s.latitude),
+      lng: Number(s.longitude),
+    }));
+
+    polylineRef.current = new google.maps.Polyline({
+      path,
+      strokeColor: "#60A5FA",
+      strokeOpacity: 1,
+      strokeWeight: 3,
+      map: mapInstance,
+    });
+
+    for (const stop of validStops) {
+      const pos = { lat: Number(stop.latitude), lng: Number(stop.longitude) };
+
+      const pin = document.createElement("div");
+      pin.style.width = "28px";
+      pin.style.height = "28px";
+      pin.style.borderRadius = "9999px";
+      pin.style.display = "flex";
+      pin.style.alignItems = "center";
+      pin.style.justifyContent = "center";
+      pin.style.color = "#fff";
+      pin.style.fontWeight = "700";
+      pin.style.fontSize = "11px";
+      pin.style.boxShadow = "0 2px 6px rgba(0,0,0,0.25)";
+      pin.style.background = "#0062CA";
+      pin.textContent = String(stop.stop_order);
+
+      const label = document.createElement("div");
+      label.textContent = stop.stop_name;
+      label.style.marginTop = "4px";
+      label.style.maxWidth = "160px";
+      label.style.padding = "3px 8px";
+      label.style.background = "#fff";
+      label.style.borderRadius = "6px";
+      label.style.boxShadow = "0 2px 6px rgba(0,0,0,0.2)";
+      label.style.fontSize = "11px";
+      label.style.fontWeight = "600";
+      label.style.color = "#111827";
+      label.style.textAlign = "center";
+      label.style.wordBreak = "break-word";
+      label.style.lineHeight = "1.2";
+
+      const wrap = document.createElement("div");
+      wrap.style.display = "flex";
+      wrap.style.flexDirection = "column";
+      wrap.style.alignItems = "center";
+      wrap.appendChild(pin);
+      wrap.appendChild(label);
+
+      const marker = new google.maps.marker.AdvancedMarkerElement({
+        map: mapInstance,
+        position: pos,
+        title: `${stop.stop_name} (#${stop.stop_order})`,
+        content: wrap,
+      });
+      markersRef.current.push(marker);
+    }
+
+    const bounds = new google.maps.LatLngBounds();
+    for (const p of path) {
+      bounds.extend(p);
+    }
+    if (path.length === 1) {
+      mapInstance.setCenter(path[0]);
+      mapInstance.setZoom(15);
+    } else {
+      mapInstance.fitBounds(bounds);
+    }
+  }, [mapInstance, stops]);
+
+  useEffect(() => {
+    syncMarkersAndBounds();
+  }, [syncMarkersAndBounds]);
+
+  useEffect(() => {
+    return () => {
+      const markers = markersRef.current;
+      markersRef.current = [];
+      for (let i = 0; i < markers.length; i += 1) {
+        const m = markers[i];
+        if (m) m.map = null;
+      }
+      const line = polylineRef.current;
+      polylineRef.current = null;
+      if (line) line.setMap(null);
+    };
+  }, []);
+
+  const firstValid = stops.find(
+    (s) =>
+      Number.isFinite(Number(s.latitude)) && Number.isFinite(Number(s.longitude)),
+  );
+  const center =
+    firstValid != null
+      ? { lat: Number(firstValid.latitude), lng: Number(firstValid.longitude) }
+      : ROUTE_STOPS_MAP_DEFAULT_CENTER;
+
+  return (
+    <GoogleMap
+      center={center}
+      zoom={14}
+      mapContainerStyle={{
+        width: "100%",
+        height: `${ROUTE_STOPS_MAP_HEIGHT_PX}px`,
+      }}
+      options={{
+        mapId: ROUTE_STOPS_MAP_ID,
+        mapTypeId: "roadmap",
+        streetViewControl: false,
+        mapTypeControl: false,
+        fullscreenControl: false,
+      }}
+      onLoad={(map) => setMapInstance(map)}
+      onUnmount={() => {
+        setMapInstance(null);
+      }}
+    />
+  );
+}
+
 type RouteDetailsResponse = {
   success?: boolean;
   data?: ApiRoute;
@@ -105,6 +270,15 @@ type RouteDetailsResponse = {
 export default function RouteDetailsPage() {
   const params = useParams();
   const routeId = params?.route_id as string | undefined;
+
+  const {
+    isLoaded: isGoogleMapsLoaded,
+    loadError: googleMapsLoadError,
+  } = useJsApiLoader({
+    id: GOOGLE_MAPS_SCRIPT_ID,
+    googleMapsApiKey: isGoogleMapsConfigured ? googleMapsApiKey : "",
+    libraries: GOOGLE_MAPS_LIBRARIES,
+  });
 
   const { getRouteDetails, error: detailsError } = useGetRouteDetails();
   const [route, setRoute] = useState<RouteProps | null>(null);
@@ -303,30 +477,29 @@ export default function RouteDetailsPage() {
           {routeStops.length === 0 ? (
             <p className="text-base-content/70">No stops configured for this route.</p>
           ) : (
-            <div className="overflow-x-auto">
-              <table className="table table-zebra">
-                <thead>
-                  <tr>
-                    <th className="w-16">#</th>
-                    <th>Stop name</th>
-                    <th className="hidden sm:table-cell">Coordinates</th>
-                  </tr>
-                </thead>
-                <tbody>
-                  {routeStops.map((stop) => (
-                    <tr key={stop._id}>
-                      <td className="font-mono text-base-content/80">
-                        {stop.stop_order}
-                      </td>
-                      <td className="font-medium">{stop.stop_name}</td>
-                      <td className="hidden font-mono text-sm text-base-content/70 sm:table-cell">
-                        {stop.latitude.toFixed(5)}, {stop.longitude.toFixed(5)}
-                      </td>
-                    </tr>
-                  ))}
-                </tbody>
-              </table>
-            </div>
+            <>
+              <p className="text-sm text-base-content/70">
+                {routeStops.length} stop{routeStops.length === 1 ? "" : "s"} on this route
+              </p>
+              {isGoogleMapsConfigured ? (
+                googleMapsLoadError ? (
+                  <p className="mt-2 text-sm text-error">
+                    Failed to load Google Maps. Check your API key and restrictions.
+                  </p>
+                ) : isGoogleMapsLoaded ? (
+                  <div className="mt-3 overflow-hidden rounded-xl border border-base-300">
+                    <RouteStopsMap stops={routeStops} />
+                  </div>
+                ) : (
+                  <p className="mt-2 text-xs text-base-content/60">Loading map...</p>
+                )
+              ) : (
+                <p className="mt-2 text-xs text-base-content/60">
+                  Add <code>NEXT_PUBLIC_GOOGLE_MAPS_API_KEY</code> in your env file to show
+                  the stops map.
+                </p>
+              )}
+            </>
           )}
         </div>
       </div>
