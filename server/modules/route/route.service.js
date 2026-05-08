@@ -74,6 +74,21 @@ async function emitRouteFreeNotifications(route, senderId) {
   }
 }
 
+async function enrichRouteWithAssignmentsAndStops(route) {
+  const [busIds, routeStops] = await Promise.all([
+    BusAssignment.distinct("bus_id", {
+      assignment_status: "active",
+      route_id: route._id,
+    }),
+    RouteStop.find({ route_id: String(route._id) }).sort({ stop_order: 1 }),
+  ]);
+  return {
+    ...route.toObject(),
+    active_buses_count: busIds.length,
+    route_stops: routeStops.map((stop) => stop.toObject()),
+  };
+}
+
 export const RouteService = {
   // GET ALL ROUTES ===================================================================
   async getAllRoutes() {
@@ -290,18 +305,25 @@ export const RouteService = {
       error.statusCode = 404;
       throw error;
     }
-    const [busIds, routeStops] = await Promise.all([
-      BusAssignment.distinct("bus_id", {
-        assignment_status: "active",
-        route_id: route._id,
-      }),
-      RouteStop.find({ route_id: String(route._id) }).sort({ stop_order: 1 }),
-    ]);
-    return {
-      ...route.toObject(),
-      active_buses_count: busIds.length,
-      route_stops: routeStops.map((stop) => stop.toObject()),
-    };
+    return enrichRouteWithAssignmentsAndStops(route);
+  },
+  async getRouteByRouteCode(routeCode, options = {}) {
+    const trimmed = typeof routeCode === "string" ? routeCode.trim() : "";
+    const routeType =
+      options.route_type === "vice_versa" ? "vice_versa" : "normal";
+    const route = await Route.findOne({
+      route_code: trimmed,
+      route_type: routeType,
+      ...ACTIVE_ROUTE_FILTER,
+    })
+      .populate("start_terminal_id")
+      .populate("end_terminal_id");
+    if (!route) {
+      const error = new Error("Route not found.");
+      error.statusCode = 404;
+      throw error;
+    }
+    return enrichRouteWithAssignmentsAndStops(route);
   },
   // UPDATE ROUTE BY ID ===================================================================
   async updateRouteById(id, updateData, options = {}) {
