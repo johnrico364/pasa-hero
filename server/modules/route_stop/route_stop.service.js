@@ -17,7 +17,7 @@ export const RouteStopService = {
     const duplicateRouteStop = await RouteStop.findOne({
       route_id: routeStopData.route_id,
       stop_name: routeStopData.stop_name,
-      route_order: routeStopData.route_order,
+      stop_order: routeStopData.stop_order,
     });
     if (duplicateRouteStop) {
       const error = new Error("This route stop already exists.");
