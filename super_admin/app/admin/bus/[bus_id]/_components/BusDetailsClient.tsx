@@ -2,7 +2,7 @@
 
 import Link from "next/link";
 import { useRouter } from "next/navigation";
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import {
   FaArrowLeft,
   FaBus,
@@ -103,18 +103,34 @@ export default function BusDetailsClient({ busId }: BusDetailsClientProps) {
   const [removedOrMissing, setRemovedOrMissing] = useState(false);
   const [loading, setLoading] = useState(true);
   const [isDeleting, setIsDeleting] = useState(false);
+  const [showDeleteModal, setShowDeleteModal] = useState(false);
+  const dialogRef = useRef<HTMLDialogElement>(null);
+
+  useEffect(() => {
+    const el = dialogRef.current;
+    if (!el) return;
+    if (showDeleteModal) {
+      el.showModal();
+    } else {
+      el.close();
+    }
+  }, [showDeleteModal]);
+
+  useEffect(() => {
+    const el = dialogRef.current;
+    if (!el) return;
+    const onClose = () => setShowDeleteModal(false);
+    el.addEventListener("close", onClose);
+    return () => el.removeEventListener("close", onClose);
+  }, []);
 
   const handleDelete = async () => {
     if (!bus || isDeleting) return;
-    const isConfirmed = window.confirm(
-      `Are you sure you want to delete Bus ${bus.bus_number}? This action cannot be undone.`,
-    );
-    if (!isConfirmed) return;
-
     setIsDeleting(true);
     const response = await deleteBus(busId);
 
     if (response?.success === true) {
+      setShowDeleteModal(false);
       router.push("/admin/bus");
       router.refresh();
       return;
@@ -217,7 +233,7 @@ export default function BusDetailsClient({ busId }: BusDetailsClientProps) {
             <OccupancyBadge status={bus.occupancy_status} />
             <button
               type="button"
-              onClick={handleDelete}
+              onClick={() => setShowDeleteModal(true)}
               disabled={isDeleting}
               className="btn bg-[#D0393A] hover:bg-[#D0393A]/80 gap-2 text-white rounded-xl btn-md text-base disabled:cursor-not-allowed disabled:opacity-70"
               aria-label={`Delete bus ${bus.bus_number}`}
@@ -233,6 +249,46 @@ export default function BusDetailsClient({ busId }: BusDetailsClientProps) {
           <span>{deleteError}</span>
         </div>
       ) : null}
+      <dialog
+        ref={dialogRef}
+        className="modal"
+        aria-labelledby="delete-bus-confirm-title"
+        aria-describedby="delete-bus-confirm-desc"
+      >
+        <div className="modal-box">
+          <h3 id="delete-bus-confirm-title" className="font-bold text-lg">
+            Delete bus?
+          </h3>
+          <p id="delete-bus-confirm-desc" className="py-4 text-base-content/80">
+            Are you sure you want to delete <strong>Bus {bus.bus_number}</strong>? This action
+            cannot be undone.
+          </p>
+          <div className="modal-action">
+            <button
+              type="button"
+              className="btn btn-ghost"
+              onClick={() => setShowDeleteModal(false)}
+              disabled={isDeleting}
+            >
+              Cancel
+            </button>
+            <button
+              type="button"
+              className="btn bg-[#D0393A] hover:bg-[#D0393A]/80 gap-2 text-white"
+              onClick={handleDelete}
+              disabled={isDeleting}
+            >
+              <FaTrash className="w-4 h-4" />
+              {isDeleting ? "Deleting..." : "Delete bus"}
+            </button>
+          </div>
+        </div>
+        <form method="dialog" className="modal-backdrop">
+          <button type="submit" tabIndex={-1} aria-hidden>
+            close
+          </button>
+        </form>
+      </dialog>
 
       <div className="grid gap-6 md:grid-cols-2">
         <div className="group rounded-2xl border border-base-content/5 bg-base-100 p-5 shadow-md shadow-base-content/5 transition-shadow hover:shadow-lg">
