@@ -3,9 +3,10 @@
 import Link from "next/link";
 import { useEffect, useRef, useState } from "react";
 import { useParams } from "next/navigation";
-import { FaArrowLeft } from "react-icons/fa";
+import { FaArrowLeft, FaExchangeAlt } from "react-icons/fa";
 import RouteStops from "./_components/RouteStops";
 import { useGetRoute } from "./_hooks/useGetRoute";
+import { useGetRouteByRouteCode } from "./_hooks/useGetRouteByRouteCode";
 
 type RouteDetailType = {
   _id: string;
@@ -17,6 +18,7 @@ type RouteDetailType = {
   end_terminal_id: { terminal_name: string };
   status: string;
   is_free_ride?: boolean;
+  route_type?: "normal" | "vice_versa";
   updatedAt: string;
 };
 
@@ -48,13 +50,20 @@ export default function RouteDetailsPage() {
 
   const { getRoute } = useGetRoute();
   const getRouteRef = useRef(getRoute);
+  const { getRouteByRouteCode } = useGetRouteByRouteCode();
+  const getRouteByRouteCodeRef = useRef(getRouteByRouteCode);
 
   const [route, setRoute] = useState<RouteDetailType>();
   const [toast, setToast] = useState<string | null>(null);
+  const [isTogglingDirection, setIsTogglingDirection] = useState(false);
 
   useEffect(() => {
     getRouteRef.current = getRoute;
   }, [getRoute]);
+
+  useEffect(() => {
+    getRouteByRouteCodeRef.current = getRouteByRouteCode;
+  }, [getRouteByRouteCode]);
 
   useEffect(() => {
     if (!toast) return;
@@ -75,6 +84,32 @@ export default function RouteDetailsPage() {
     fetchRouteDetails();
   }, [routeId]);
 
+  async function handleToggleDirection() {
+    if (!route?.route_code) return;
+    const currentType =
+      route.route_type === "vice_versa" ? "vice_versa" : "normal";
+    const oppositeType = currentType === "normal" ? "vice_versa" : "normal";
+    setIsTogglingDirection(true);
+    try {
+      const data = await getRouteByRouteCodeRef.current(
+        route.route_code,
+        oppositeType,
+      );
+      if (data?.success) {
+        setRoute(data.data as RouteDetailType);
+      } else {
+        setToast(
+          typeof data?.message === "string" ? data.message : "Could not load route",
+        );
+        setTimeout(() => setToast(null), 3500);
+      }
+    } finally {
+      setIsTogglingDirection(false);
+    }
+  }
+
+  const isViceVersa = route?.route_type === "vice_versa";
+
   return (
     <div className="space-y-6 pb-6 pt-4">
       <div className="flex flex-wrap items-start justify-between gap-3">
@@ -84,10 +119,25 @@ export default function RouteDetailsPage() {
             View route profile and operational summary.
           </p>
         </div>
-        <Link href="/admin/routes" className="btn bg-[#0062CA] text-white">
-          <FaArrowLeft className="size-4" />
-          Back to routes
-        </Link>
+        <div className="flex flex-wrap items-center gap-2">
+          <button
+            type="button"
+            className="btn btn-outline"
+            disabled={!route?.route_code || isTogglingDirection}
+            onClick={handleToggleDirection}
+          >
+            <FaExchangeAlt className="size-4" />
+            {isTogglingDirection
+              ? "Loading…"
+              : isViceVersa
+                ? "View forward direction"
+                : "View reverse direction"}
+          </button>
+          <Link href="/admin/routes" className="btn bg-[#0062CA] text-white">
+            <FaArrowLeft className="size-4" />
+            Back to routes
+          </Link>
+        </div>
       </div>
 
       {toast ? (

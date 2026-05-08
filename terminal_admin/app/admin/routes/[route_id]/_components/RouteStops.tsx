@@ -169,9 +169,11 @@ export default function RouteStops({
     getRouteStopsRef.current = getRouteStops;
   }, [getRouteStops]);
 
+  const stopsRouteId = routeMongoId ?? routeId;
+
   useEffect(() => {
     const fetchRouteStops = async () => {
-      const data = await getRouteStopsRef.current(routeId);
+      const data = await getRouteStopsRef.current(stopsRouteId);
       if (data.success) {
         const normalized = normalizeStopOrder(data.data as RouteStopType[]);
         setStops(normalized);
@@ -182,7 +184,7 @@ export default function RouteStops({
       }
     };
     fetchRouteStops();
-  }, [routeId, onToast]);
+  }, [stopsRouteId, onToast]);
 
   const activeStops = useMemo(() => normalizeStopOrder(stops), [stops]);
   const sortableIds = useMemo(
