@@ -17,7 +17,13 @@ function TerminalStatusBadge({ status }: { status: string }) {
   );
 }
 
-export default function TerminalTable({ terminals }: { terminals: TerminalProps[] }) {
+export default function TerminalTable({
+  terminals,
+  onTerminalUpdated,
+}: {
+  terminals: TerminalProps[];
+  onTerminalUpdated?: () => void | Promise<void>;
+}) {
   return (
     <div className="overflow-x-auto rounded-box border border-base-content/5 bg-base-100">
       <table className="table">
@@ -49,7 +55,10 @@ export default function TerminalTable({ terminals }: { terminals: TerminalProps[
                   <FaRegEye className="w-5 h-5" />
                   View
                 </Link>
-                <EditTerminal terminal={terminal} />
+                <EditTerminal
+                  terminal={terminal}
+                  onUpdated={onTerminalUpdated}
+                />
               </td>
             </tr>
           ))}

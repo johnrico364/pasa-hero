@@ -244,7 +244,10 @@ export default function Terminal() {
           <span className="loading loading-spinner loading-lg text-primary" />
         </div>
       ) : (
-        <TerminalTable terminals={filteredTerminals} />
+        <TerminalTable
+          terminals={filteredTerminals}
+          onTerminalUpdated={refetchTerminals}
+        />
       )}
       <div className="text-xl font-bold mt-10">Terminal Logs</div>
       <div className="flex flex-wrap items-center justify-between gap-4">
