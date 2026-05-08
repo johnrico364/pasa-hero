@@ -29,11 +29,15 @@ type AddBusStopProps = {
 
 const DEFAULT_MAP_ZOOM = 14.5;
 
+/** Default map pin / center when no prior stop on the route (Mandaue City, Cebu). */
+const DEFAULT_FOCUS_LAT = 10.3237;
+const DEFAULT_FOCUS_LNG = 123.9223;
+
 export default function AddBusStop({ routeId, activeStops, onAddStop, onToast }: AddBusStopProps) {
   const [openAddStopModal, setOpenAddStopModal] = useState(false);
   const [newStopName, setNewStopName] = useState("");
-  const [newStopLatitude, setNewStopLatitude] = useState<number>(14.5995);
-  const [newStopLongitude, setNewStopLongitude] = useState<number>(120.9842);
+  const [newStopLatitude, setNewStopLatitude] = useState<number>(DEFAULT_FOCUS_LAT);
+  const [newStopLongitude, setNewStopLongitude] = useState<number>(DEFAULT_FOCUS_LNG);
   const [mapInstance, setMapInstance] = useState<google.maps.Map | null>(null);
   const markerRef = useRef<google.maps.marker.AdvancedMarkerElement | null>(null);
   const addStopDialogRef = useRef<HTMLDialogElement>(null);
@@ -58,8 +62,8 @@ export default function AddBusStop({ routeId, activeStops, onAddStop, onToast }:
     if (!routeId) return;
     const last = activeStops[activeStops.length - 1];
     setNewStopName("");
-    setNewStopLatitude(last?.latitude ?? 14.5995);
-    setNewStopLongitude(last?.longitude ?? 120.9842);
+    setNewStopLatitude(last?.latitude ?? DEFAULT_FOCUS_LAT);
+    setNewStopLongitude(last?.longitude ?? DEFAULT_FOCUS_LNG);
     setOpenAddStopModal(true);
   }
 

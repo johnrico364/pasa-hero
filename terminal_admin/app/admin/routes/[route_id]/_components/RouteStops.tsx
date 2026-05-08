@@ -25,6 +25,7 @@ import DeleteBusStop from "./DeleteBusStop";
 import EditBusStop from "./EditBusStop";
 import RouteStopsMap from "./RouteStopsMap";
 import { useGetRouteStops } from "../_hooks/useGetRouteStops";
+import { usePostBusStop } from "../_hooks/usePostBusStop";
 import { useReorderRouteStops } from "../_hooks/useReorderRouteStops";
 import {
   googleMapsApiKey,
@@ -141,6 +142,7 @@ export default function RouteStops({
   onToast,
 }: RouteStopsProps) {
   const { getRouteStops } = useGetRouteStops();
+  const { postBusStop } = usePostBusStop();
   const { reorderRouteStops } = useReorderRouteStops();
   const getRouteStopsRef = useRef(getRouteStops);
   const [stops, setStops] = useState<RouteStopType[]>([]);
@@ -214,8 +216,37 @@ export default function RouteStops({
     [activeStops],
   );
 
-  async function onAddRouteStop() {
-    return { ok: false as const, message: "Not implemented" };
+  async function onAddRouteStop(payload: {
+    stopName: string;
+    latitude: number;
+    longitude: number;
+  }) {
+    const apiRouteId = routeMongoId ?? routeId;
+    const nextOrder =
+      activeStops.length === 0
+        ? 1
+        : Math.max(...activeStops.map((s) => s.stop_order)) + 1;
+
+    const res = await postBusStop({
+      route_id: apiRouteId,
+      stop_name: payload.stopName.trim(),
+      stop_order: nextOrder,
+      latitude: payload.latitude,
+      longitude: payload.longitude,
+    });
+
+    if (res && "success" in res && res.success && res.data) {
+      const row = res.data as RouteStopType;
+      setStops((prev) => normalizeStopOrder([...prev, row]));
+      setBaselineOrderIds((prev) => [...prev, row._id]);
+      return { ok: true as const, message: "Bus stop added." };
+    }
+
+    const message =
+      res && typeof res === "object" && "message" in res
+        ? String((res as { message?: string }).message)
+        : "Failed to add bus stop";
+    return { ok: false as const, message };
   }
 
   function handleDragEnd(event: DragEndEvent) {

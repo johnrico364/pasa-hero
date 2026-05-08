@@ -17,10 +17,14 @@ export const usePostBusStop = () => {
       return response;
     } catch (error) {
       if (axios.isAxiosError(error)) {
-        setError(error.response?.data?.message);
-      } else {
-        setError("Unexpected error");
+        const data = error.response?.data;
+        setError(
+          typeof data?.message === "string" ? data.message : "Request failed",
+        );
+        return data;
       }
+      setError("Unexpected error");
+      return { success: false, message: "Unexpected error" };
     }
   }, []);
   return { postBusStop, error };
