@@ -392,8 +392,12 @@ export const RouteService = {
       normalizedUpdateData,
       "route_code",
     );
+    const syncFreeRideToSibling = Object.prototype.hasOwnProperty.call(
+      normalizedUpdateData,
+      "is_free_ride",
+    );
     let siblingId = null;
-    if (syncStatusToSibling || syncRouteCodeToSibling) {
+    if (syncStatusToSibling || syncRouteCodeToSibling || syncFreeRideToSibling) {
       const siblingType = route.route_type === "normal" ? "vice_versa" : "normal";
       const sibling = await Route.findOne({
         route_code: route.route_code,
@@ -418,37 +422,17 @@ export const RouteService = {
     if (
       updated &&
       siblingId &&
-      (syncStatusToSibling || syncRouteCodeToSibling)
+      (syncStatusToSibling || syncRouteCodeToSibling || syncFreeRideToSibling)
     ) {
       const siblingPatch = {};
       if (syncStatusToSibling) siblingPatch.status = updated.status;
       if (syncRouteCodeToSibling) siblingPatch.route_code = updated.route_code;
+      if (syncFreeRideToSibling) siblingPatch.is_free_ride = updated.is_free_ride;
       await Route.findOneAndUpdate(
         { _id: siblingId, ...ACTIVE_ROUTE_FILTER },
         siblingPatch,
         { new: true, runValidators: true },
       );
-    }
-
-    if (
-      updated &&
-      Object.prototype.hasOwnProperty.call(normalizedUpdateData, "is_free_ride")
-    ) {
-      const startId = terminalIdFromRouteField(updated.start_terminal_id);
-      const endId = terminalIdFromRouteField(updated.end_terminal_id);
-      const siblingType = updated.route_type === "normal" ? "vice_versa" : "normal";
-      if (startId && endId) {
-        await Route.updateMany(
-          {
-            ...ACTIVE_ROUTE_FILTER,
-            _id: { $ne: updated._id },
-            start_terminal_id: endId,
-            end_terminal_id: startId,
-            route_type: siblingType,
-          },
-          { $set: { is_free_ride: Boolean(normalizedUpdateData.is_free_ride) } },
-        );
-      }
     }
 
     const nowFree = updated?.is_free_ride === true;
