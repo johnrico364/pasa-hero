@@ -1,9 +1,10 @@
 "use client";
 
-import { useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import Link from "next/link";
 import axios from "axios";
 import { useParams } from "next/navigation";
+import { GoogleMap, useJsApiLoader } from "@react-google-maps/api";
 import {
   TerminalProps,
   TerminalLogProps,
@@ -17,37 +18,13 @@ import { useGetTerminalDetails } from "../_hooks/useGetTerminalDetails";
 import { useGetRoutes } from "../../route/_hooks/useGetRoutes";
 import EditRoute from "../../route/_components/EditRoute";
 import {
-  getGoogleMapsEmbedUrl,
-  getGoogleMapsLink,
+  googleMapsApiKey,
   isGoogleMapsConfigured,
 } from "@/lib/firebaseClient";
-
-// Static data for terminals (matches main terminal page)
-const TERMINALS_STATIC: TerminalProps[] = [
-  { id: "1", terminal_name: "PITX (Parañaque Integrated Terminal Exchange)", location_lat: 14.5547, location_lng: 120.9842, status: "active" },
-  { id: "2", terminal_name: "SM North EDSA", location_lat: 14.6568, location_lng: 121.0312, status: "active" },
-  { id: "3", terminal_name: "Monumento", location_lat: 14.6548, location_lng: 120.9845, status: "active" },
-  { id: "4", terminal_name: "Fairview", location_lat: 14.7333, location_lng: 121.0500, status: "active" },
-  { id: "5", terminal_name: "Tamiya Terminal", location_lat: 10.3157, location_lng: 123.8854, status: "active" },
-  { id: "6", terminal_name: "Pacific Terminal", location_lat: 10.3128, location_lng: 123.8912, status: "inactive" },
-];
-
-// Static data for terminal logs (matches main terminal page)
-const TERMINAL_LOGS_STATIC: TerminalLogProps[] = [
-  { id: "log1", terminal_id: "1", bus_id: "b1", terminal_name: "PITX", bus_number: "01-AB", event_type: "arrival", status: "confirmed", event_time: "2025-03-01T07:15:00", confirmation_time: "2025-03-01T07:16:00", auto_detected: false, remarks: null },
-  { id: "log2", terminal_id: "1", bus_id: "b2", terminal_name: "PITX", bus_number: "12C", event_type: "departure", status: "pending", event_time: "2025-03-01T07:45:00", confirmation_time: null, auto_detected: false, remarks: null },
-  { id: "log3", terminal_id: "2", bus_id: "b3", terminal_name: "SM North EDSA", bus_number: "13B", event_type: "arrival", status: "pending", event_time: "2025-03-01T08:00:00", confirmation_time: null, auto_detected: true, remarks: "Gate sensor" },
-  { id: "log4", terminal_id: "3", bus_id: "b1", terminal_name: "Monumento", bus_number: "01-AB", event_type: "departure", status: "confirmed", event_time: "2025-03-01T06:30:00", confirmation_time: "2025-03-01T06:31:00", auto_detected: false, remarks: null },
-  { id: "log5", terminal_id: "4", bus_id: "b4", terminal_name: "Fairview", bus_number: "O1L", event_type: "arrival", status: "rejected", event_time: "2025-03-01T08:20:00", confirmation_time: null, auto_detected: false, remarks: "Wrong terminal scan" },
-];
-
-// Static data for routes (terminal ids align with TERMINALS_STATIC)
-type RouteAtTerminal = {
-  id: string;
-  displayName: string;
-  email: string;
-  status: string;
-};
+import {
+  GOOGLE_MAPS_LIBRARIES,
+  GOOGLE_MAPS_SCRIPT_ID,
+} from "@/lib/googleMaps";
 
 type ApiTerminalRef = {
   _id?: string;
@@ -291,7 +268,104 @@ function formatDateTime(iso: string | undefined) {
   });
 }
 
+/** Same mapId as AddTerminal — required for AdvancedMarkerElement. */
+const TERMINAL_MAP_ID = "DEMO_MAP_ID";
+
+function TerminalLocationMap({
+  lat,
+  lng,
+  title,
+  zoom,
+  heightPx,
+}: {
+  lat: number;
+  lng: number;
+  title: string;
+  zoom: number;
+  heightPx: number;
+}) {
+  const [mapInstance, setMapInstance] = useState<google.maps.Map | null>(null);
+  const markerRef = useRef<google.maps.marker.AdvancedMarkerElement | null>(null);
+  const position = useMemo(() => ({ lat, lng }), [lat, lng]);
+
+  const syncAdvancedMarker = useCallback(() => {
+    if (!mapInstance || !window.google?.maps?.marker?.AdvancedMarkerElement) return;
+
+    const pos = { lat, lng };
+
+    if (!markerRef.current) {
+      const pin = document.createElement("div");
+      pin.style.width = "28px";
+      pin.style.height = "28px";
+      pin.style.borderRadius = "9999px";
+      pin.style.display = "flex";
+      pin.style.alignItems = "center";
+      pin.style.justifyContent = "center";
+      pin.style.color = "#fff";
+      pin.style.fontWeight = "700";
+      pin.style.fontSize = "11px";
+      pin.style.boxShadow = "0 2px 6px rgba(0,0,0,0.25)";
+      pin.style.background = "#0062CA";
+      pin.textContent = "T";
+
+      markerRef.current = new google.maps.marker.AdvancedMarkerElement({
+        map: mapInstance,
+        position: pos,
+        title,
+        content: pin,
+      });
+    } else {
+      markerRef.current.position = pos;
+      markerRef.current.title = title;
+      markerRef.current.map = mapInstance;
+    }
+  }, [mapInstance, lat, lng, title]);
+
+  useEffect(() => {
+    syncAdvancedMarker();
+  }, [syncAdvancedMarker]);
+
+  useEffect(() => {
+    if (!mapInstance) return;
+    mapInstance.setCenter(position);
+  }, [mapInstance, position]);
+
+  useEffect(() => {
+    return () => {
+      if (markerRef.current) {
+        markerRef.current.map = null;
+        markerRef.current = null;
+      }
+    };
+  }, []);
+
+  return (
+    <GoogleMap
+      center={position}
+      zoom={zoom}
+      mapContainerStyle={{ width: "100%", height: `${heightPx}px` }}
+      options={{
+        mapId: TERMINAL_MAP_ID,
+        mapTypeId: "roadmap",
+        streetViewControl: false,
+        mapTypeControl: false,
+        fullscreenControl: false,
+      }}
+      onLoad={(map) => setMapInstance(map)}
+      onUnmount={() => {
+        if (markerRef.current) {
+          markerRef.current.map = null;
+          markerRef.current = null;
+        }
+        setMapInstance(null);
+      }}
+    />
+  );
+}
+
 const LOGS_PER_PAGE = 10;
+const TERMINAL_MAP_ZOOM = 15;
+const TERMINAL_MAP_HEIGHT_PX = 440;
 
 export default function TerminalDetailsPage() {
   const params = useParams();
@@ -310,6 +384,14 @@ export default function TerminalDetailsPage() {
   const [loading, setLoading] = useState(true);
   const [logsLoading, setLogsLoading] = useState(true);
   const [logCurrentPage, setLogCurrentPage] = useState(1);
+  const {
+    isLoaded: isGoogleMapsLoaded,
+    loadError: googleMapsLoadError,
+  } = useJsApiLoader({
+    id: GOOGLE_MAPS_SCRIPT_ID,
+    googleMapsApiKey: isGoogleMapsConfigured ? googleMapsApiKey : "",
+    libraries: GOOGLE_MAPS_LIBRARIES,
+  });
 
   useEffect(() => {
     if (!terminalId) return;
@@ -386,8 +468,6 @@ export default function TerminalDetailsPage() {
     () => Math.max(1, Math.ceil(logs.length / LOGS_PER_PAGE)),
     [logs.length],
   );
-  const mapsLink = terminal ? getGoogleMapsLink(terminal.location_lat, terminal.location_lng) : "";
-  const embedUrl = terminal ? getGoogleMapsEmbedUrl(terminal.location_lat, terminal.location_lng) : null;
 
   const currentLogPage = Math.min(logCurrentPage, logTotalPages);
 
@@ -530,23 +610,31 @@ export default function TerminalDetailsPage() {
               {terminal.location_lng.toFixed(6)}
             </p>
             <a
-              href={mapsLink}
+              href={`https://www.google.com/maps?q=${terminal.location_lat},${terminal.location_lng}`}
               target="_blank"
               rel="noopener noreferrer"
               className="link link-primary text-sm"
             >
               Open in Google Maps →
             </a>
-            {isGoogleMapsConfigured && embedUrl ? (
-              <div className="mt-3 overflow-hidden rounded-xl border border-base-300">
-                <iframe
-                  title={`${terminal.terminal_name} map`}
-                  src={embedUrl}
-                  loading="lazy"
-                  referrerPolicy="no-referrer-when-downgrade"
-                  className="h-52 w-full border-0"
-                />
-              </div>
+            {isGoogleMapsConfigured ? (
+              googleMapsLoadError ? (
+                <p className="mt-2 text-xs text-error">
+                  Failed to load Google Maps. Check your API key and restrictions.
+                </p>
+              ) : isGoogleMapsLoaded ? (
+                <div className="mt-3 overflow-hidden rounded-xl border border-base-300">
+                  <TerminalLocationMap
+                    lat={terminal.location_lat}
+                    lng={terminal.location_lng}
+                    title={terminal.terminal_name}
+                    zoom={TERMINAL_MAP_ZOOM}
+                    heightPx={TERMINAL_MAP_HEIGHT_PX}
+                  />
+                </div>
+              ) : (
+                <p className="mt-2 text-xs text-base-content/60">Loading map...</p>
+              )
             ) : (
               <p className="mt-2 text-xs text-base-content/60">
                 Add <code>NEXT_PUBLIC_GOOGLE_MAPS_API_KEY</code> in your env file to show map preview.
