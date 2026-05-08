@@ -227,7 +227,6 @@ export default function EditRoute({
         is_free_ride: Boolean(data.is_free_ride),
         sender_id: senderId,
       };
-      console.log("[EditRoute] update payload:", payload);
 
       const result = await updateRoute(route.id, payload);
       if (!result?.success) {
