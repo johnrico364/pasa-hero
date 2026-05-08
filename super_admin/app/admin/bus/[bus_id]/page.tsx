@@ -1,4 +1,4 @@
-import BusDetailsClient from "./BusDetailsClient";
+import BusDetailsClient from "./_components/BusDetailsClient";
 
 export default async function BusInformationPage({
   params,

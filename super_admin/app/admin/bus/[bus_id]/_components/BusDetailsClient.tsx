@@ -12,9 +12,9 @@ import {
   FaRoute,
   FaTrash,
 } from "react-icons/fa6";
-import type { BusProps, AssignmentStatus, AssignmentResult } from "../BusProps";
-import { mapApiBusToBusProps, type ApiBus } from "../mapApiBus";
-import { useGetBusDetails } from "../_hooks/useGetBusDetails";
+import type { BusProps, AssignmentStatus, AssignmentResult } from "../../BusProps";
+import { mapApiBusToBusProps, type ApiBus } from "../../mapApiBus";
+import { useGetBusDetails } from "../../_hooks/useGetBusDetails";
 import { useDeleteBus } from "../_hooks/useDeleteBus";
 
 function BusStatusBadge({ status }: { status: string }) {
@@ -112,7 +112,7 @@ export default function BusDetailsClient({ busId }: BusDetailsClientProps) {
     if (!isConfirmed) return;
 
     setIsDeleting(true);
-    const response = await deleteBus(bus.id);
+    const response = await deleteBus(busId);
 
     if (response?.success === true) {
       router.push("/admin/bus");
