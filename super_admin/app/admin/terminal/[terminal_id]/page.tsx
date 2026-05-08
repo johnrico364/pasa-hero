@@ -393,6 +393,22 @@ export default function TerminalDetailsPage() {
     libraries: GOOGLE_MAPS_LIBRARIES,
   });
 
+  const refetchRoutesAtTerminal = useCallback(async () => {
+    if (!terminalId) return;
+    const routesRes = await getRoutes();
+    if (routesRes?.success === true && Array.isArray(routesRes.data)) {
+      const allRoutes = (routesRes.data as ApiRoute[]).map(mapApiRouteToProps);
+      setRoutesAtTerminal(
+        allRoutes.filter(
+          (r) =>
+            r.start_terminal_id === terminalId || r.end_terminal_id === terminalId,
+        ),
+      );
+    } else {
+      setRoutesAtTerminal([]);
+    }
+  }, [terminalId, getRoutes]);
+
   useEffect(() => {
     if (!terminalId) return;
 
@@ -691,7 +707,7 @@ export default function TerminalDetailsPage() {
                         route={route}
                         modalId={`edit-route-modal-terminal-${route.id}`}
                         hideStartTerminalInput
-                        onRouteUpdated={() => window.location.reload()}
+                        onRouteUpdated={refetchRoutesAtTerminal}
                       />
                     </td>
                   </tr>
