@@ -5,6 +5,7 @@ import { useForm } from "react-hook-form";
 import { yupResolver } from "@hookform/resolvers/yup";
 import { MdOutlineEdit } from "react-icons/md";
 import type { BusProps } from "../BusProps";
+import { BUS_STATUS_OPTIONS } from "../mapApiBus";
 import { useUpdateBus } from "../_hooks/useUpdateBus";
 import { editBusSchema, type EditBusFormData } from "./editBusSchema";
 
@@ -21,7 +22,10 @@ const defaultValues: EditBusFormData = {
   bus_code: "",
   plate_number: "",
   maximum_capacity: 0,
+  status: "active",
 };
+
+type BusStatusOption = (typeof BUS_STATUS_OPTIONS)[number];
 
 export default function EditBusModal({
   bus,
@@ -44,10 +48,14 @@ export default function EditBusModal({
 
   useEffect(() => {
     if (bus) {
+      const status = BUS_STATUS_OPTIONS.includes(bus.bus_status as BusStatusOption)
+        ? (bus.bus_status as BusStatusOption)
+        : "active";
       reset({
         bus_code: bus.bus_number,
         plate_number: bus.plate_number,
         maximum_capacity: bus.capacity,
+        status,
       });
     } else {
       reset(defaultValues);
@@ -62,6 +70,7 @@ export default function EditBusModal({
         bus_number: data.bus_code,
         plate_number: data.plate_number,
         capacity: data.maximum_capacity,
+        status: data.status,
       });
 
       if (!response) {
@@ -147,6 +156,24 @@ export default function EditBusModal({
               />
               {errors.maximum_capacity && (
                 <p className="text-error text-sm mt-1">{errors.maximum_capacity.message}</p>
+              )}
+            </div>
+            <div className="form-control">
+              <label className="label">
+                <span className="label-text">Status</span>
+              </label>
+              <select
+                className={`select select-bordered w-full ${errors.status ? "select-error" : ""}`}
+                {...register("status")}
+              >
+                {BUS_STATUS_OPTIONS.map((status) => (
+                  <option key={status} value={status}>
+                    {status}
+                  </option>
+                ))}
+              </select>
+              {errors.status && (
+                <p className="text-error text-sm mt-1">{errors.status.message}</p>
               )}
             </div>
           </div>
