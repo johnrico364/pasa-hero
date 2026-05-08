@@ -2,6 +2,8 @@ import express from 'express';
 import cors from 'cors';
 import dotenv from "dotenv";
 import compression from 'compression';
+import path from "path";
+import { fileURLToPath } from "url";
 import admin from './config/firebase.config.js';
 import { connectDB } from "./db.js";
 
@@ -24,6 +26,8 @@ import systemLogRoutes from "./modules/system_log/system_log.route.js";
 import dashboardRoutes from "./modules/admin_dashboard/dashboard.route.js";
 
 const app = express();
+const __filename = fileURLToPath(import.meta.url);
+const __dirname = path.dirname(__filename);
 
 app.use(cors());
 dotenv.config();
@@ -57,7 +61,8 @@ app.use("/api", async (req, res, next) => {
 });
 
 // Image static folder
-app.use("/images", express.static("images"));
+const imagesDir = path.join(__dirname, "images");
+app.use("/images", express.static(imagesDir));
 
 // API Routes
 app.use('/api/users/firebase', userFirebaseRoutes);
