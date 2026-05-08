@@ -1,7 +1,9 @@
 "use client";
 
 import Link from "next/link";
-import { useEffect, useState } from "react";
+import Image from "next/image";
+import { useRouter } from "next/navigation";
+import { useEffect, useRef, useState } from "react";
 import {
   FaArrowLeft,
   FaUser,
@@ -10,21 +12,25 @@ import {
   FaGaugeHigh,
   FaBus,
   FaRoute,
+  FaTrash,
 } from "react-icons/fa6";
-import type { DriverProps } from "../_components/drivers/DriverProps";
+import type { DriverProps } from "../../_components/drivers/DriverProps";
 import type {
   AssignmentProps,
   AssignmentStatus,
   AssignmentResult,
-} from "../_components/assignmens/AssignmentProps";
-import { useGetDriverDetails } from "../_hooks/useGetDriverDetails";
-import { useGetBusAssignments } from "../_hooks/useGetBusAssignments";
+} from "../../_components/assignmens/AssignmentProps";
+import { useGetDriverDetails } from "../../_hooks/useGetDriverDetails";
+import { useGetBusAssignments } from "../../_hooks/useGetBusAssignments";
+import { useDeleteDriver } from "../_hooks/useDeleteDriver";
 import {
   mapApiDriverToProps,
   mapApiBusAssignmentToProps,
   type ApiDriver,
   type ApiBusAssignmentRow,
-} from "../_lib/apiMappers";
+} from "../../_lib/apiMappers";
+
+const DELETE_DRIVER_CONFIRM_MODAL_ID = "delete-driver-confirm-modal";
 
 function DriverStatusBadge({ status }: { status: string }) {
   const map: Record<string, string> = {
@@ -100,8 +106,14 @@ function resolveDriverProfileImage(profileImage?: string): string {
   if (!profileImage || profileImage === "default.png") return fallback;
   if (/^https?:\/\//i.test(profileImage)) return profileImage;
 
-  const baseUrl = (process.env.NEXT_PUBLIC_API_URL ?? "").replace(/\/$/, "");
-  const normalized = profileImage.replace(/\\/g, "/").replace(/^\/+/, "");
+  const baseUrl = (process.env.NEXT_PUBLIC_API_URL ?? "http://localhost:4000").replace(
+    /\/$/,
+    "",
+  );
+  const normalized = profileImage
+    .replace(/\\/g, "/")
+    .replace(/^\/+/, "")
+    .replace(/^server\//, "");
 
   if (normalized.startsWith("images/")) {
     return `${baseUrl}/${normalized}`;
@@ -129,11 +141,17 @@ function pickLatestAssignment(forDriver: AssignmentProps[]): AssignmentProps | n
 }
 
 export default function DriverDetailsClient({ driverId }: DriverDetailsClientProps) {
+  const router = useRouter();
   const { getDriverDetails, error: driverHookError } = useGetDriverDetails();
   const { getBusAssignments, error: assignmentsHookError } = useGetBusAssignments();
+  const { deleteDriver, error: deleteHookError } = useDeleteDriver();
   const [driver, setDriver] = useState<DriverProps | null>(null);
   const [latestAssignment, setLatestAssignment] = useState<AssignmentProps | null>(null);
   const [loading, setLoading] = useState(true);
+  const [isDeleting, setIsDeleting] = useState(false);
+  const [deleteError, setDeleteError] = useState<string | null>(null);
+  const [showDeleteModal, setShowDeleteModal] = useState(false);
+  const deleteDialogRef = useRef<HTMLDialogElement>(null);
 
   useEffect(() => {
     let cancelled = false;
@@ -168,6 +186,31 @@ export default function DriverDetailsClient({ driverId }: DriverDetailsClientPro
     };
   }, [driverId, getDriverDetails, getBusAssignments]);
 
+  useEffect(() => {
+    const el = deleteDialogRef.current;
+    if (!el) return;
+    if (showDeleteModal) {
+      el.showModal();
+    } else {
+      el.close();
+    }
+  }, [showDeleteModal]);
+
+  useEffect(() => {
+    const el = deleteDialogRef.current;
+    if (!el) return;
+    const onClose = () => setShowDeleteModal(false);
+    el.addEventListener("close", onClose);
+    return () => el.removeEventListener("close", onClose);
+  }, []);
+
+  const profileImageSrc = resolveDriverProfileImage(driver?.profile_image);
+  const [imageSrc, setImageSrc] = useState(profileImageSrc);
+
+  useEffect(() => {
+    setImageSrc(profileImageSrc);
+  }, [profileImageSrc]);
+
   if (loading) {
     return (
       <div className="flex flex-col items-center justify-center gap-4 py-24">
@@ -196,7 +239,25 @@ export default function DriverDetailsClient({ driverId }: DriverDetailsClientPro
   }
 
   const fullName = `${driver.f_name} ${driver.l_name}`;
-  const profileImageSrc = resolveDriverProfileImage(driver.profile_image);
+
+  async function handleConfirmDelete() {
+    setIsDeleting(true);
+    setDeleteError(null);
+    try {
+      const response = await deleteDriver(driverId);
+      if (!response?.success) {
+        setDeleteError(deleteHookError ?? response?.message ?? "Failed to delete driver");
+        setIsDeleting(false);
+        return;
+      }
+      setShowDeleteModal(false);
+      router.push("/admin/driver");
+      router.refresh();
+    } catch {
+      setDeleteError("Failed to delete driver");
+      setIsDeleting(false);
+    }
+  }
 
   return (
     <div className="space-y-8 pt-6">
@@ -215,14 +276,15 @@ export default function DriverDetailsClient({ driverId }: DriverDetailsClientPro
             </Link>
             <div className="flex items-center gap-4">
               <div className="h-24 w-24 overflow-hidden rounded-xl border border-base-content/10 bg-base-200">
-                <img
-                  src={profileImageSrc}
+                <Image
+                  src={imageSrc}
                   alt={`${fullName} profile`}
+                  width={96}
+                  height={96}
                   className="h-full w-full object-cover"
-                  onError={(e) => {
-                    e.currentTarget.onerror = null;
-                    e.currentTarget.src = "/default-img.jpg";
-                  }}
+                  unoptimized
+                  loading="eager"
+                  onError={() => setImageSrc("/default-img.jpg")}
                 />
               </div>
               <div>
@@ -234,6 +296,21 @@ export default function DriverDetailsClient({ driverId }: DriverDetailsClientPro
             </div>
           </div>
           <DriverStatusBadge status={driver.status} />
+        </div>
+        <div className="relative mt-4 flex justify-end">
+          <button
+            type="button"
+            onClick={() => {
+              setDeleteError(null);
+              setShowDeleteModal(true);
+            }}
+            disabled={isDeleting}
+            className="btn bg-[#D0393A] hover:bg-[#D0393A]/80 gap-2 text-white rounded-xl btn-md text-base"
+            aria-label={`Delete driver ${fullName}`}
+          >
+            <FaTrash className="w-4 h-4" />
+            {isDeleting ? "Deleting…" : "Delete driver"}
+          </button>
         </div>
       </div>
 
@@ -325,6 +402,53 @@ export default function DriverDetailsClient({ driverId }: DriverDetailsClientPro
           )}
         </div>
       </div>
+
+      <dialog
+        ref={deleteDialogRef}
+        id={DELETE_DRIVER_CONFIRM_MODAL_ID}
+        className="modal"
+        aria-labelledby="delete-driver-confirm-title"
+        aria-describedby="delete-driver-confirm-desc"
+      >
+        <div className="modal-box">
+          <h3 id="delete-driver-confirm-title" className="font-bold text-lg">
+            Delete driver?
+          </h3>
+          <p id="delete-driver-confirm-desc" className="py-4 text-base-content/80">
+            Are you sure you want to delete <strong>{fullName}</strong> (License{" "}
+            <strong>{driver.license_number}</strong>)? This action cannot be undone.
+          </p>
+          {deleteError || deleteHookError ? (
+            <div role="alert" className="alert alert-error mb-3 text-sm">
+              <span>{deleteError ?? deleteHookError}</span>
+            </div>
+          ) : null}
+          <div className="modal-action">
+            <button
+              type="button"
+              className="btn btn-ghost"
+              onClick={() => setShowDeleteModal(false)}
+              disabled={isDeleting}
+            >
+              Cancel
+            </button>
+            <button
+              type="button"
+              className="btn bg-[#D0393A] hover:bg-[#D0393A]/80 gap-2 text-white"
+              onClick={handleConfirmDelete}
+              disabled={isDeleting}
+            >
+              <FaTrash className="w-4 h-4" />
+              {isDeleting ? "Deleting…" : "Delete driver"}
+            </button>
+          </div>
+        </div>
+        <form method="dialog" className="modal-backdrop">
+          <button type="submit" tabIndex={-1} aria-hidden>
+            close
+          </button>
+        </form>
+      </dialog>
     </div>
   );
 }

@@ -1,4 +1,4 @@
-import DriverDetailsClient from "./DriverDetailsClient";
+import DriverDetailsClient from "./_components/DriverDetailsClient";
 
 export default async function DriverDetailsPage({
   params,
