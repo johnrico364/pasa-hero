@@ -109,6 +109,9 @@ class _NotificationScreenState extends State<NotificationScreen> {
   static const String _notificationsInboxApiBase =
       'https://pasa-hero-server.vercel.app/api/notifications/inbox';
 
+  /// Keep the Older section short so the inbox stays scannable.
+  static const int _maxOlderNotifications = 10;
+
   bool _loading = true;
   String? _error;
   List<Map<String, dynamic>> _inboxItems = const [];
@@ -779,7 +782,11 @@ class _NotificationScreenState extends State<NotificationScreen> {
       );
     }
     final fresh = partitioned.fresh;
-    final older = partitioned.older;
+    final olderAll = partitioned.older;
+    final olderTruncated = olderAll.length > _maxOlderNotifications;
+    final older = olderTruncated
+        ? olderAll.sublist(0, _maxOlderNotifications)
+        : olderAll;
     if (fresh.isEmpty && older.isEmpty) {
       return const Center(
         child: Text(
@@ -809,6 +816,22 @@ class _NotificationScreenState extends State<NotificationScreen> {
       for (var i = 0; i < older.length; i++) {
         if (i > 0) children.add(const SizedBox(height: 12));
         children.add(_rowToCard(older[i], emphasizeNew: false));
+      }
+      if (olderTruncated) {
+        children.add(const SizedBox(height: 12));
+        children.add(
+          Padding(
+            padding: const EdgeInsets.only(top: 4),
+            child: Text(
+              'Showing $_maxOlderNotifications most recent older items.',
+              style: TextStyle(
+                fontSize: 12,
+                fontWeight: FontWeight.w500,
+                color: ValidationTheme.textPrimary.withOpacity(0.65),
+              ),
+            ),
+          ),
+        );
       }
     }
 

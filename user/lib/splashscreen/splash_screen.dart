@@ -67,7 +67,7 @@ class SplashScreen extends StatelessWidget {
                   SizedBox(height: screenHeight * 0.02),
                   // Description - Responsive
                   Text(
-                    'GoBus finds nearby buses in real time, so you wait less and ride smarter.',
+                    'PasaHero finds nearby buses in real time, so you wait less and ride smarter.',
                     style: TextStyle(
                       color: Colors.white,
                       fontSize: descriptionFontSize,
