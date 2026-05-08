@@ -16,5 +16,5 @@ const String kUserNotificationWsUrl = String.fromEnvironment(
 /// and also as a **backup** while WebSocket is connected (so a silent socket still syncs).
 const int kUserNotificationPollSeconds = int.fromEnvironment(
   'USER_NOTIFICATION_POLL_SECONDS',
-  defaultValue: 1,
+  defaultValue: 30,
 );

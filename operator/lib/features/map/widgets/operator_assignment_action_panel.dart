@@ -492,6 +492,9 @@ class _AssignmentCard extends StatelessWidget {
     final theme = Theme.of(context);
     final route = assignment.routeName ?? 'Route';
     final bus = assignment.busLabel ?? 'Bus';
+    final driver = assignment.driverName?.trim();
+    final driverLine =
+        driver != null && driver.isNotEmpty ? 'Driver: $driver' : null;
 
     if (compact) {
       return Row(
@@ -517,6 +520,18 @@ class _AssignmentCard extends StatelessWidget {
                     color: theme.colorScheme.onSurfaceVariant,
                   ),
                 ),
+                if (driverLine != null) ...[
+                  const SizedBox(height: 2),
+                  Text(
+                    driverLine,
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
+                    style: theme.textTheme.bodySmall?.copyWith(
+                      color: theme.colorScheme.onSurfaceVariant,
+                      fontSize: 11,
+                    ),
+                  ),
+                ],
               ],
             ),
           ),
@@ -555,6 +570,17 @@ class _AssignmentCard extends StatelessWidget {
                       color: theme.colorScheme.onSurfaceVariant,
                     ),
                   ),
+                  if (driverLine != null) ...[
+                    const SizedBox(height: 2),
+                    Text(
+                      driverLine,
+                      maxLines: 2,
+                      overflow: TextOverflow.ellipsis,
+                      style: theme.textTheme.bodySmall?.copyWith(
+                        color: theme.colorScheme.onSurfaceVariant,
+                      ),
+                    ),
+                  ],
                 ],
               ),
             ),
