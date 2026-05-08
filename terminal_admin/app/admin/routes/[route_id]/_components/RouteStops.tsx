@@ -19,11 +19,21 @@ import {
   verticalListSortingStrategy,
 } from "@dnd-kit/sortable";
 import { CSS } from "@dnd-kit/utilities";
+import { useJsApiLoader } from "@react-google-maps/api";
 import AddBusStop from "./AddBusStop";
 import DeleteBusStop from "./DeleteBusStop";
 import EditBusStop from "./EditBusStop";
+import RouteStopsMap from "./RouteStopsMap";
 import { useGetRouteStops } from "../_hooks/useGetRouteStops";
 import { useReorderRouteStops } from "../_hooks/useReorderRouteStops";
+import {
+  googleMapsApiKey,
+  isGoogleMapsConfigured,
+} from "@/lib/firebaseClient";
+import {
+  GOOGLE_MAPS_LIBRARIES,
+  GOOGLE_MAPS_SCRIPT_ID,
+} from "@/lib/googleMaps";
 import { FaEdit, FaGripVertical, FaTrash } from "react-icons/fa";
 
 type RouteStopType = {
@@ -147,6 +157,13 @@ export default function RouteStops({
       coordinateGetter: sortableKeyboardCoordinates,
     }),
   );
+
+  const { isLoaded: isGoogleMapsLoaded, loadError: googleMapsLoadError } =
+    useJsApiLoader({
+      id: GOOGLE_MAPS_SCRIPT_ID,
+      googleMapsApiKey: isGoogleMapsConfigured ? googleMapsApiKey : "",
+      libraries: GOOGLE_MAPS_LIBRARIES,
+    });
 
   useEffect(() => {
     getRouteStopsRef.current = getRouteStops;
@@ -279,6 +296,28 @@ export default function RouteStops({
           </button>
         ) : null}
       </div>
+
+      {activeStops.length > 0 ? (
+        isGoogleMapsConfigured ? (
+          googleMapsLoadError ? (
+            <p className="mb-3 text-sm text-error">
+              Failed to load Google Maps. Check your API key and restrictions.
+            </p>
+          ) : isGoogleMapsLoaded ? (
+            <div className="mb-3 overflow-hidden rounded-xl border border-base-300">
+              <RouteStopsMap stops={activeStops} />
+            </div>
+          ) : (
+            <p className="mb-3 text-xs text-base-content/60">Loading map...</p>
+          )
+        ) : (
+          <p className="mb-3 text-xs text-base-content/60">
+            Add{" "}
+            <code className="mx-1">NEXT_PUBLIC_GOOGLE_MAPS_API_KEY</code> to your
+            env file to show the stops map.
+          </p>
+        )
+      ) : null}
 
       <AddBusStop
         routeId={routeMongoId ?? routeId}
