@@ -29,6 +29,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
   String? _terminalRouteName;
   String? _terminalRouteCode;
   String? _terminalBusLabel;
+  String? _terminalDriverName;
   bool _terminalRouteFreeRide = false;
   String? _terminalAssignmentError;
 
@@ -109,6 +110,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
     String? routeName;
     String? routeCode;
     String? busLabel;
+    String? driverName;
     var freeRide = false;
     String? err = result.errorHint;
 
@@ -116,6 +118,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
       final a = result.items.first;
       routeName = a.routeName;
       busLabel = a.busLabel;
+      driverName = a.driverName;
       final rid = a.routeId;
       if (rid != null && rid.isNotEmpty) {
         final meta = await _fetchRouteMeta(rid);
@@ -143,6 +146,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
       _terminalRouteName = routeName;
       _terminalRouteCode = routeCode;
       _terminalBusLabel = busLabel;
+      _terminalDriverName = driverName;
       _terminalRouteFreeRide = freeRide;
     });
     if (routeCode != null && routeCode.trim().isNotEmpty) {
@@ -180,6 +184,10 @@ class _ProfileScreenState extends State<ProfileScreen> {
               if (_terminalBusLabel != null) ...[
                 const SizedBox(height: 12),
                 _buildInfoRow('Bus', _terminalBusLabel!),
+              ],
+              if (_terminalDriverName != null) ...[
+                const SizedBox(height: 12),
+                _buildInfoRow('Driver', _terminalDriverName!),
               ],
             ],
           ),
@@ -322,6 +330,8 @@ class _ProfileScreenState extends State<ProfileScreen> {
                                             'Code: $_terminalRouteCode',
                                           if (_terminalBusLabel != null)
                                             'Bus: $_terminalBusLabel',
+                                          if (_terminalDriverName != null)
+                                            'Driver: $_terminalDriverName',
                                         ].join('\n')
                                       : 'No active assignment yet. Your terminal admin assigns your route; pull refresh (↻) to update.',
                               style: TextStyle(

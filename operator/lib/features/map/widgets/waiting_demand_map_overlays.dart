@@ -17,9 +17,10 @@ class WaitingDemandMapOverlays extends StatelessWidget {
         const WaitingDemandLegend(expandAlignToBottomRight: false),
         const SizedBox(height: 10),
         Padding(
-          padding: const EdgeInsets.only(right: 8, left: 8),
+          // Extra left inset so the card does not cover the route polyline / map center.
+          padding: const EdgeInsets.only(right: 8, left: 28),
           child: ConstrainedBox(
-            constraints: const BoxConstraints(maxWidth: 280),
+            constraints: const BoxConstraints(maxWidth: 248),
             child: Material(
               elevation: 6,
               shadowColor: Colors.black26,

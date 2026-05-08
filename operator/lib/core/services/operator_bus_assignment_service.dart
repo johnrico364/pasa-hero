@@ -11,6 +11,7 @@ class OperatorBusAssignmentSnapshot {
     required this.assignmentResult,
     this.routeName,
     this.busLabel,
+    this.driverName,
     this.busId,
     this.routeId,
   });
@@ -20,6 +21,8 @@ class OperatorBusAssignmentSnapshot {
   final String assignmentResult;
   final String? routeName;
   final String? busLabel;
+  /// From API [driver_name] (assigned driver for this bus).
+  final String? driverName;
   /// From list row `bus_id` — required for `POST /api/terminal-logs`.
   final String? busId;
   /// From list row `route_id` — used to resolve start/end terminals for logs.
@@ -148,12 +151,17 @@ class OperatorBusAssignmentService {
       busLabel = plate;
     }
 
+    final dn = m['driver_name']?.toString();
+    final driverName =
+        (dn == null || dn.isEmpty || dn == '—') ? null : dn.trim();
+
     return OperatorBusAssignmentSnapshot(
       id: id,
       assignmentStatus: status,
       assignmentResult: resultRaw,
       routeName: routeName,
       busLabel: busLabel,
+      driverName: driverName,
       busId: _stringId(m['bus_id']),
       routeId: _stringId(m['route_id']),
     );

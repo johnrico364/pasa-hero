@@ -22,7 +22,7 @@ class OperatorLocationSyncService {
   bool _tickInProgress = false;
   int _session = 0;
 
-  void start({Duration interval = const Duration(seconds: 30)}) {
+  void start({Duration interval = const Duration(seconds: 8)}) {
     stop();
     final sid = _session;
     // Defer first publish slightly so RouteScreen / profile can set [locationSyncRouteFallback]
@@ -103,7 +103,7 @@ class OperatorLocationSyncService {
   }
 
   /// Merges the new route into [operator_locations] right away so riders are not stuck
-  /// on the previous [routeCode] until the next periodic GPS tick (~30s).
+  /// on the previous [routeCode] until the next periodic GPS tick (~8s).
   Future<void> mergeRouteCodeIntoOperatorLocation(String routeCode) async {
     final user = FirebaseAuth.instance.currentUser;
     if (user == null) return;

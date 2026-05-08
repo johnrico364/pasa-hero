@@ -1,4 +1,5 @@
 import 'dart:async';
+import 'dart:math' as math;
 import 'package:flutter/foundation.dart'
     show TargetPlatform, defaultTargetPlatform, kIsWeb, listEquals, setEquals;
 import 'package:flutter/material.dart';
@@ -100,9 +101,18 @@ class _MapScreenState extends State<MapScreen> {
   Polyline? _catalogRouteHighlightPolyline;
   Set<Circle> _userLocationCircles = {};
   String? _mapStyleJson;
+  final Map<String, _OperatorMotionState> _operatorMotionById = {};
+  Timer? _operatorAnimationTimer;
 
   /// Radius in meters for the faded blue "you are here" glow when away from a bus stop.
   static const double _userLocationGlowRadiusMeters = 120.0;
+  static const bool _enableOperatorRotation = true;
+  static const Duration _operatorAnimationFrameInterval =
+      Duration(milliseconds: 120);
+  static const int _minOperatorAnimationMs = 1200;
+  static const int _maxOperatorAnimationMs = 9000;
+  /// Below this leg length (m), keep prior heading to avoid jitter from GPS noise when idle.
+  static const double _minMetersForHeadingUpdate = 12.0;
 
   final RouteService _routeService = RouteService();
   final MapStyleService _mapStyleService = MapStyleService();
@@ -256,6 +266,8 @@ class _MapScreenState extends State<MapScreen> {
   @override
   void initState() {
     super.initState();
+    _syncOperatorMotionsFromWidget();
+    _startOperatorAnimationTimer();
     _applyCatalogRouteHighlight(widget.routeCatalogHighlightPoints);
     _loadMapStyle();
     // Show all Cebu bus stops (sample on first frame, then from Firestore)
@@ -305,7 +317,9 @@ class _MapScreenState extends State<MapScreen> {
         });
       }
     }
-    if (!listEquals(oldWidget.nearbyOperators, widget.nearbyOperators) ||
+    final nearbyChanged =
+        !listEquals(oldWidget.nearbyOperators, widget.nearbyOperators);
+    final freeRideOrStyleChanged =
         !setEquals(
           oldWidget.activeFreeRideOperatorIds,
           widget.activeFreeRideOperatorIds,
@@ -327,7 +341,11 @@ class _MapScreenState extends State<MapScreen> {
           widget.mongoFreeRideRouteHints,
         ) ||
         oldWidget.selectedCatalogRouteIsFreeRide !=
-            widget.selectedCatalogRouteIsFreeRide) {
+            widget.selectedCatalogRouteIsFreeRide;
+    if (nearbyChanged || freeRideOrStyleChanged) {
+      if (nearbyChanged) {
+        _syncOperatorMotionsFromWidget();
+      }
       setState(_rebuildOverlayMarkers);
     }
     if (oldWidget.selectedRouteCodeForStopsStream !=
@@ -385,6 +403,7 @@ class _MapScreenState extends State<MapScreen> {
 
   @override
   void dispose() {
+    _operatorAnimationTimer?.cancel();
     _positionStreamSubscription?.cancel();
     // Do not call [GoogleMapController.dispose] — the [GoogleMap] platform view owns it;
     // disposing here causes "disposed" / lifecycle errors when the widget rebuilds.
@@ -905,13 +924,15 @@ class _MapScreenState extends State<MapScreen> {
 
   /// User location, operators, and circles (bus stops from Firestore stream).
   void _rebuildOverlayMarkers() {
+    _advanceOperatorMotions(DateTime.now());
     final Set<Marker> next = {};
     final Set<Circle> nextCircles = {};
     final activeFreeRideIds =
         widget.activeFreeRideOperatorIds.map((id) => id.trim().toLowerCase()).toSet();
     final selectedCode = widget.selectedRouteCodeForStopsStream?.trim();
 
-    for (final op in widget.nearbyOperators) {
+    for (final motion in _operatorMotionById.values) {
+      final op = motion.operator;
       final byId = _operatorMatchesFirestoreFreeRideOperatorId(
         op,
         activeFreeRideIds,
@@ -932,9 +953,11 @@ class _MapScreenState extends State<MapScreen> {
           // Include free-ride state in id so the platform view replaces the bitmap
           // when switching between standard vs free-ride (same id can stick visually).
           markerId: MarkerId('operator_${op.operatorId}_${isFreeRide ? 'fr' : 'std'}'),
-          position: LatLng(op.latitude, op.longitude),
+          position: motion.currentPosition,
           icon: _operatorBusIcon.iconForOperator(isFreeRide: isFreeRide),
           anchor: const Offset(0.5, 0.92),
+          flat: _enableOperatorRotation,
+          rotation: _enableOperatorRotation ? motion.headingDegrees : 0,
           infoWindow: InfoWindow(
             title: isFreeRide ? 'Live bus (Free Ride)' : 'Live bus',
             snippet: op.routeCode != null && op.routeCode!.isNotEmpty
@@ -958,6 +981,106 @@ class _MapScreenState extends State<MapScreen> {
     }
     _markers = next;
     _userLocationCircles = nextCircles;
+  }
+
+  void _startOperatorAnimationTimer() {
+    _operatorAnimationTimer?.cancel();
+    _operatorAnimationTimer = Timer.periodic(
+      _operatorAnimationFrameInterval,
+      (_) {
+        if (!mounted || _operatorMotionById.isEmpty) return;
+        final now = DateTime.now();
+        final changed = _advanceOperatorMotions(now);
+        if (changed) {
+          setState(_rebuildOverlayMarkers);
+        }
+      },
+    );
+  }
+
+  void _syncOperatorMotionsFromWidget() {
+    final now = DateTime.now();
+    _advanceOperatorMotions(now);
+    final liveIds = <String>{};
+    for (final op in widget.nearbyOperators) {
+      final id = op.operatorId.trim();
+      if (id.isEmpty) continue;
+      liveIds.add(id);
+      final target = LatLng(op.latitude, op.longitude);
+      final existing = _operatorMotionById[id];
+      if (existing == null) {
+        _operatorMotionById[id] = _OperatorMotionState(
+          operator: op,
+          currentPosition: target,
+          segmentStart: target,
+          segmentTarget: target,
+          segmentStartedAt: now,
+          segmentEndsAt: now,
+          lastServerUpdateAt: now,
+          headingDegrees: 0,
+        );
+        continue;
+      }
+      final moved = _distanceMeters(existing.segmentTarget, target) > 1.0;
+      existing.operator = op;
+      if (!moved) {
+        existing.lastServerUpdateAt = now;
+        continue;
+      }
+      final elapsed = now.difference(existing.lastServerUpdateAt).inMilliseconds;
+      final animMs =
+          elapsed.clamp(_minOperatorAnimationMs, _maxOperatorAnimationMs).toInt();
+      final start = existing.currentPosition;
+      existing.segmentStart = start;
+      existing.segmentTarget = target;
+      existing.segmentStartedAt = now;
+      existing.segmentEndsAt = now.add(Duration(milliseconds: animMs));
+      existing.lastServerUpdateAt = now;
+      final legMeters = _distanceMeters(start, target);
+      if (legMeters >= _minMetersForHeadingUpdate) {
+        existing.headingDegrees = _bearingDegrees(start, target);
+      }
+    }
+    final idsToRemove = _operatorMotionById.keys
+        .where((id) => !liveIds.contains(id))
+        .toList(growable: false);
+    for (final id in idsToRemove) {
+      _operatorMotionById.remove(id);
+    }
+  }
+
+  bool _advanceOperatorMotions(DateTime now) {
+    var changed = false;
+    for (final state in _operatorMotionById.values) {
+      final newPos = state.interpolate(now);
+      if (newPos.latitude != state.currentPosition.latitude ||
+          newPos.longitude != state.currentPosition.longitude) {
+        state.currentPosition = newPos;
+        changed = true;
+      }
+    }
+    return changed;
+  }
+
+  static double _distanceMeters(LatLng a, LatLng b) {
+    return Geolocator.distanceBetween(
+      a.latitude,
+      a.longitude,
+      b.latitude,
+      b.longitude,
+    );
+  }
+
+  static double _bearingDegrees(LatLng from, LatLng to) {
+    final lat1 = from.latitude * math.pi / 180.0;
+    final lat2 = to.latitude * math.pi / 180.0;
+    final dLon = (to.longitude - from.longitude) * math.pi / 180.0;
+    final y = math.sin(dLon) * math.cos(lat2);
+    final x =
+        math.cos(lat1) * math.sin(lat2) -
+        math.sin(lat1) * math.cos(lat2) * math.cos(dLon);
+    final brng = math.atan2(y, x) * 180.0 / math.pi;
+    return (brng + 360.0) % 360.0;
   }
 
   /// Adds user location marker when map is ready.
@@ -1245,5 +1368,41 @@ class _MapScreenState extends State<MapScreen> {
         ],
       ),
     );
+  }
+}
+
+class _OperatorMotionState {
+  _OperatorMotionState({
+    required this.operator,
+    required this.currentPosition,
+    required this.segmentStart,
+    required this.segmentTarget,
+    required this.segmentStartedAt,
+    required this.segmentEndsAt,
+    required this.lastServerUpdateAt,
+    required this.headingDegrees,
+  });
+
+  NearbyOperator operator;
+  LatLng currentPosition;
+  LatLng segmentStart;
+  LatLng segmentTarget;
+  DateTime segmentStartedAt;
+  DateTime segmentEndsAt;
+  DateTime lastServerUpdateAt;
+  double headingDegrees;
+
+  LatLng interpolate(DateTime now) {
+    final total = segmentEndsAt.difference(segmentStartedAt).inMilliseconds;
+    if (total <= 0) return segmentTarget;
+    final elapsed = now.difference(segmentStartedAt).inMilliseconds;
+    final t = (elapsed / total).clamp(0.0, 1.0);
+    final lat =
+        segmentStart.latitude +
+        (segmentTarget.latitude - segmentStart.latitude) * t;
+    final lng =
+        segmentStart.longitude +
+        (segmentTarget.longitude - segmentStart.longitude) * t;
+    return LatLng(lat, lng);
   }
 }
